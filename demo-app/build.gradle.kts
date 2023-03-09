@@ -4,7 +4,7 @@ plugins {
 }
 
 dependencies {
-    implementation("com.apollographql.apollo3:apollo-runtime:3.7.4")
+    implementation("be.solidlab.sdx:solid-sdx-client:0.1")
 }
 
 repositories {
@@ -27,7 +27,7 @@ tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile> {
 
 sdx {
     importShapesFromURL.addAll(
-        "https://data.vlaanderen.be/shacl/adresregister-SHACL.ttl"
+        "http://localhost:3000/shapes/contact-SHACL.ttl"
     )
     packageName.set("be.solid.sdx.demo.queries")
 }

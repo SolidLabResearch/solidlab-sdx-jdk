@@ -2,3 +2,5 @@
 demo-app/build
 gradle-plugin/.gradle
 gradle-plugin/build
+client-lib/.gradle
+client-lib/build
