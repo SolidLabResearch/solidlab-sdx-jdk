@@ -15,6 +15,7 @@ dependencies {
     implementation("io.vertx:vertx-lang-kotlin")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-jdk8:1.6.4")
     api("com.apollographql.apollo3:apollo-runtime:3.7.4")
+    testImplementation(kotlin("test"))
 }
 
 repositories {
@@ -34,6 +35,10 @@ java {
 tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile> {
     kotlinOptions.jvmTarget = JavaVersion.VERSION_17.toString()
     kotlinOptions.javaParameters = true
+}
+
+tasks.test {
+    useJUnitPlatform()
 }
 
 publishing {
