@@ -97,7 +97,7 @@ class SolidLDPBackend(private val schemaFile: String) : SolidTargetBackend<Solid
     }
 
     private fun handleIdProperty(runtimeEnv: DataFetchingEnvironment): String {
-        return runtimeEnv.getSource<IntermediaryResult>().subject.uri
+        return runtimeEnv.getSource<IntermediaryResult>().subject.toString(false)
     }
 
     private fun handleScalarProperty(runtimeEnv: DataFetchingEnvironment): Any? {
