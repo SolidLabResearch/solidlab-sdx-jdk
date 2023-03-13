@@ -14,6 +14,7 @@ dependencies {
     implementation("io.vertx:vertx-web-client")
     implementation("io.vertx:vertx-lang-kotlin")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-jdk8:1.6.4")
+    implementation("org.jetbrains.kotlin:kotlin-reflect:1.7.20")
     api("com.apollographql.apollo3:apollo-runtime:3.7.4")
     testImplementation(kotlin("test"))
 }
