@@ -110,32 +110,31 @@ class SolidLDPBackend(private val schemaFile: String) : SolidTargetBackend<Solid
 
     private fun handleRelationProperty(runtimeEnv: DataFetchingEnvironment): Any? {
         val source = runtimeEnv.getSource<IntermediaryResult>()
+        val type = getTypeClassURI(runtimeEnv.fieldType)
         val result = source.documentGraph
             .find(source.subject, getPropertyPath(runtimeEnv), Node.ANY)
+            .filterKeep { source.documentGraph.find(it.`object`, RDF.type.asNode(), type).hasNext() }
             .mapWith { IntermediaryResult(source.documentGraph, it.`object`) }
         return if (isCollectionType(runtimeEnv.fieldType)) result.toList() else result.asSequence().firstOrNull()
     }
 
     private fun handleEntrypoint(runtimeEnv: DataFetchingEnvironment): CompletionStage<Any?> {
         val targetUri = runtimeEnv.getLocalContext<SolidLDPContext>().target
-        val className =
-            (GraphQLTypeUtil.unwrapAll(runtimeEnv.fieldType) as GraphQLObjectType).getAppliedDirective("is")
-                .getArgument("class")
-                .getValue<String>()
+        val type = getTypeClassURI(runtimeEnv.fieldType)
         return downloadDocumentGraph(targetUri).thenApply { documentGraph ->
             if (runtimeEnv.containsArgument("id")) {
                 // Specific instance entrypoint
                 documentGraph.find(
                     NodeFactory.createURI(runtimeEnv.getArgument("id")),
                     RDF.type.asNode(),
-                    NodeFactory.createURI(className)
+                    type
                 ).mapWith { IntermediaryResult(documentGraph, it.subject) }.asSequence().firstOrNull()
             } else {
                 // Collection entrypoint
                 documentGraph.find(
                     Node.ANY,
                     RDF.type.asNode(),
-                    NodeFactory.createURI(className)
+                    type
                 ).mapWith { IntermediaryResult(documentGraph, it.subject) }.toList()
             }
         }
@@ -162,6 +161,13 @@ class SolidLDPBackend(private val schemaFile: String) : SolidTargetBackend<Solid
                 .getValue<String>().removeSurrounding("<", ">")
         )
     }
+
+    private fun getTypeClassURI(type: GraphQLOutputType) =
+        NodeFactory.createURI(
+            (GraphQLTypeUtil.unwrapAll(type) as GraphQLObjectType).getAppliedDirective("is")
+                .getArgument("class")
+                .getValue<String>()
+        )
 
     private fun convertScalarValue(type: GraphQLUnmodifiedType, literal: LiteralLabel): Any? {
         if (!GraphQLTypeUtil.isScalar(type)) {
