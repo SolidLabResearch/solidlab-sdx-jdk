@@ -26,9 +26,10 @@ import java.io.StringReader
 import java.util.*
 import java.util.concurrent.CompletionStage
 
-data class SolidLDPContext(val target: String = "src/main/graphql/schema.graphqls") : SolidTargetBackendContext
+data class SolidLDPContext(val target: String) : SolidTargetBackendContext
 
-class SolidLDPBackend(private val schemaFile: String) : SolidTargetBackend<SolidLDPContext> {
+class SolidLDPBackend(private val schemaFile: String = "src/main/graphql/schema.graphqls") :
+    SolidTargetBackend<SolidLDPContext> {
 
     private val vertx = Vertx.vertx()
     private val webClient = WebClient.create(vertx)
