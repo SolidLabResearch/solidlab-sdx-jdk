@@ -7,8 +7,7 @@ import be.solidlab.sdx.client.lib.backends.ldp.SolidLDPContext
 import kotlinx.coroutines.runBlocking
 
 fun main() = runBlocking {
-    val client = SolidClient
-        .using(SolidLDPBackend()).build()
+    val client = SolidClient(SolidLDPBackend())
 
     // Execute query
     val context = SolidLDPContext(target = "https://cloud.ilabt.imec.be/index.php/s/Sb9oJ5YKX4DXaMo/download/jdoe.ttl")
