@@ -57,7 +57,7 @@ object SHACLToGraphQL {
 
         println("Building GraphQL schema from Graph")
         val graphQLTypes = context.allShapes.iteratorAll().asSequence()
-            .map { shape -> generateObjectType(shape as NodeShape, context) }.toSet()
+            .map { shape -> generateObjectType(shape as NodeShape, context) }.distinctBy { it.name }.toSet()
 
         val schema = GraphQLSchema.newSchema()
             .query(generateEntryPoints(graphQLTypes))
