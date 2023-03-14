@@ -80,7 +80,7 @@ fun generateEntryPoints(types: Set<GraphQLObjectType>): GraphQLObjectType {
                     .type(type)
                     .build(),
                 GraphQLFieldDefinition.newFieldDefinition()
-                    .name("${decapitalize(type.name)}s")
+                    .name("${decapitalize(type.name)}Collection")
                     .type(GraphQLList.list(type))
                     .build()
             )
