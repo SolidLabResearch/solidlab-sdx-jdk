@@ -75,8 +75,8 @@ ex:Organization
           sh:minCount 1;
           sh:maxCount 1;
       ],
-                [
-                    sh:path schema:address ;
-                    sh:class schema:PostalAddress ;
-                    sh:maxCount 1;
-                ].
+    [
+          sh:path schema:address ;
+          sh:class schema:PostalAddress ;
+          sh:maxCount 1;
+      ].

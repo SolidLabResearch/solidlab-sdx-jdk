@@ -56,9 +56,9 @@ type Organization @is(class : "http://schema.org/Organization") {
 
 type Query {
   address(id: String): Address
-  addresss: [Address]
+  addressCollection: [Address]
   contact(id: String): Contact
-  contacts: [Contact]
+  contactCollection: [Contact]
   organization(id: String): Organization
-  organizations: [Organization]
+  organizationCollection: [Organization]
 }

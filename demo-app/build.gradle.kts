@@ -27,7 +27,7 @@ tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile> {
 
 sdx {
     importShapesFromURL.addAll(
-        "http://localhost:3000/shapes/contact-SHACL.ttl"
+        "https://cloud.ilabt.imec.be/index.php/s/w3Hr9MENpM7fMBE/download/contact-SHACL.ttl"
     )
     packageName.set("be.solid.sdx.demo.queries")
 }
