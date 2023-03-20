@@ -1,6 +1,7 @@
 package be.solidlab.sdx.gradle.plugin
 
 import com.apollographql.apollo3.compiler.capitalizeFirstLetter
+import graphql.GraphQL
 import graphql.Scalars
 import graphql.introspection.Introspection
 import graphql.schema.*
@@ -22,6 +23,7 @@ import org.apache.jena.sparql.graph.GraphFactory
 import org.apache.jena.vocabulary.RDF
 import org.apache.jena.vocabulary.XSD
 import org.gradle.api.file.Directory
+import java.io.File
 import java.net.URI
 import java.util.*
 import kotlin.jvm.optionals.getOrNull
@@ -43,22 +45,25 @@ val idField: GraphQLFieldDefinition = GraphQLFieldDefinition.newFieldDefinition(
 val isDirective: GraphQLDirective = GraphQLDirective.newDirective()
     .name("is")
     .argument(GraphQLArgument.newArgument().name("class").type(Scalars.GraphQLString))
-    .validLocation(Introspection.DirectiveLocation.OBJECT)
+    .validLocations(Introspection.DirectiveLocation.OBJECT, Introspection.DirectiveLocation.INPUT_OBJECT)
     .build()
 val propertyDirective: GraphQLDirective = GraphQLDirective.newDirective()
     .name("property")
     .argument(GraphQLArgument.newArgument().name("iri").type(Scalars.GraphQLString))
-    .validLocation(Introspection.DirectiveLocation.FIELD_DEFINITION)
+    .validLocations(
+        Introspection.DirectiveLocation.FIELD_DEFINITION,
+        Introspection.DirectiveLocation.INPUT_FIELD_DEFINITION
+    )
     .build()
 
 object SHACLToGraphQL {
-    fun getSchema(shaclDir: Directory, shapeImports: List<ShapeImport>): String {
-        println("Looking at Shape definitions in ${shaclDir.asFile.path}")
+    fun getSchema(shaclDir: File, shapeImports: List<ShapeImport>): String {
+        println("Looking at Shape definitions in ${shaclDir.path}")
         val graph = GraphFactory.createDefaultGraph()
         shapeImports.forEach { shapeImport ->
             println("  --> Importing ${shapeImport.importUrl} into graph")
             val shapeSubGraph = GraphFactory.createDefaultGraph()
-            RDFDataMgr.read(shapeSubGraph, shaclDir.file(shapeImport.getTargetFileName()).asFile.toURI().toString())
+            RDFDataMgr.read(shapeSubGraph, File(shaclDir, shapeImport.getTargetFileName()).toURI().toString())
             shapeSubGraph.find().filterDrop { it.subject.isURI && shapeImport.exclude.contains(it.subject.uri) }
                 .forEach {
                     if (it.predicateMatches(RDF.type.asNode())) {
@@ -86,11 +91,13 @@ object SHACLToGraphQL {
         println("  --> Assembling the GraphQL schema")
         val schema = GraphQLSchema.newSchema()
             .query(generateEntryPoints(graphQLTypes))
-            .mutation(generateMutations(graphQLInputTypes))
-            .additionalTypes(graphQLTypes)
+            .mutation(generateMutations(context, graphQLTypes.associateBy { it.name }))
+            .additionalTypes(graphQLTypes.plus(graphQLInputTypes))
             .additionalDirectives(setOf(isDirective, propertyDirective, identifierDirective))
             .build()
-        val schemaPrinter = SchemaPrinter(SchemaPrinter.Options.defaultOptions())
+        val schemaPrinter = SchemaPrinter(SchemaPrinter.Options.defaultOptions().includeSchemaElement {
+            it !is GraphQLDirective || setOf("property", "is", "identifier").contains(it.name)
+        })
         return schemaPrinter.print(schema)
     }
 }
@@ -114,8 +121,108 @@ fun generateEntryPoints(types: Set<GraphQLObjectType>): GraphQLObjectType {
         .build()
 }
 
-fun generateMutations(types: Set<GraphQLInputObjectType>): GraphQLObjectType {
-    TODO()
+fun generateMutations(context: ParseContext, typesMap: Map<String, GraphQLObjectType>): GraphQLObjectType {
+    return GraphQLObjectType.newObject()
+        .name("Mutation")
+        .fields(context.allShapes.flatMap { shape ->
+            shape as NodeShape
+            val shapeName = parseName(shape.shapeNode, context)
+            listOf(
+                // Create mutation
+                GraphQLFieldDefinition.newFieldDefinition()
+                    .name("create$shapeName")
+                    .description("Create a new instance of $shapeName")
+                    .argument(
+                        GraphQLArgument.newArgument().name("input")
+                            .type(GraphQLNonNull.nonNull(GraphQLTypeReference.typeRef("${InputTypeConfiguration.CREATE_TYPE.typePrefix}${shapeName}Input")))
+                    )
+                    .type(GraphQLNonNull.nonNull(GraphQLTypeReference.typeRef(shapeName)))
+                    .build(),
+                // Per-instance specific mutations
+                GraphQLFieldDefinition.newFieldDefinition()
+                    .name("mutate$shapeName")
+                    .description("Access update/delete mutations for a specific instance of $shapeName")
+                    .argument(
+                        GraphQLArgument.newArgument().name("id").type(GraphQLNonNull.nonNull(Scalars.GraphQLID))
+                    )
+                    .type(
+                        GraphQLObjectType.newObject()
+                            .name("${shapeName}Mutation")
+                            .fields(
+                                listOf(
+                                    GraphQLFieldDefinition.newFieldDefinition()
+                                        .name("update")
+                                        .description("Perform an update mutation based on the given input type.")
+                                        .argument(
+                                            GraphQLArgument.newArgument().name("input")
+                                                .type(GraphQLNonNull.nonNull(GraphQLTypeReference.typeRef("${InputTypeConfiguration.UPDATE_TYPE.typePrefix}${shapeName}Input")))
+                                        )
+                                        .type(GraphQLNonNull.nonNull(GraphQLTypeReference.typeRef(shapeName)))
+                                        .build(),
+                                    GraphQLFieldDefinition.newFieldDefinition()
+                                        .name("delete")
+                                        .description("Delete this instance of $shapeName")
+                                        .type(GraphQLNonNull.nonNull(GraphQLTypeReference.typeRef(shapeName)))
+                                        .build(),
+                                    *typesMap[shapeName]!!.fields.filter { !it.type.rawType().isScalar() }
+                                        .flatMap { fieldDef ->
+                                            val collection =
+                                                GraphQLTypeUtil.isList(GraphQLTypeUtil.unwrapNonNull(fieldDef.type))
+                                            val refName = (fieldDef.type.rawType() as GraphQLTypeReference).name
+                                            val addPrefix = if (collection) "add" else "set"
+                                            val addDescription =
+                                                if (collection) "Add an instance of $refName to this $shapeName" else "Set the $refName for this $shapeName"
+                                            val removePrefix = if (collection) "remove" else "clear"
+                                            val removeDescription =
+                                                if (collection) "Remove the specified instance of $refName from this $shapeName" else "Clear the $refName from this $shapeName"
+                                            listOf(
+                                                GraphQLFieldDefinition.newFieldDefinition()
+                                                    .name("$addPrefix$refName")
+                                                    .description(addDescription)
+                                                    .argument(
+                                                        GraphQLArgument.newArgument().name("input")
+                                                            .type(GraphQLNonNull.nonNull(GraphQLTypeReference.typeRef("${InputTypeConfiguration.CREATE_TYPE.typePrefix}${refName}Input")))
+                                                    )
+                                                    .type(GraphQLNonNull.nonNull(GraphQLTypeReference.typeRef(shapeName)))
+                                                    .build(),
+                                                GraphQLFieldDefinition.newFieldDefinition()
+                                                    .name("$removePrefix$refName")
+                                                    .description(removeDescription)
+                                                    .arguments(
+                                                        if (collection) listOf(
+                                                            GraphQLArgument.newArgument().name("id")
+                                                                .type(GraphQLNonNull.nonNull(Scalars.GraphQLID)).build()
+                                                        ) else emptyList()
+                                                    )
+                                                    .type(GraphQLNonNull.nonNull(GraphQLTypeReference.typeRef(shapeName)))
+                                                    .build(),
+                                                GraphQLFieldDefinition.newFieldDefinition()
+                                                    .name("link$refName")
+                                                    .description("Create a relation of type $refName between the instance of $shapeName and the given ID")
+                                                    .argument(
+                                                        GraphQLArgument.newArgument().name("id")
+                                                            .type(GraphQLNonNull.nonNull(Scalars.GraphQLID))
+                                                    )
+                                                    .type(GraphQLNonNull.nonNull(GraphQLTypeReference.typeRef(shapeName)))
+                                                    .build(),
+                                                GraphQLFieldDefinition.newFieldDefinition()
+                                                    .name("unlink$refName")
+                                                    .description("Remove the relation of type $refName between the instance of $shapeName and the given ID (if it exists)")
+                                                    .argument(
+                                                        GraphQLArgument.newArgument().name("id")
+                                                            .type(GraphQLNonNull.nonNull(Scalars.GraphQLID))
+                                                    )
+                                                    .type(GraphQLNonNull.nonNull(GraphQLTypeReference.typeRef(shapeName)))
+                                                    .build()
+                                            )
+                                        }.toTypedArray()
+                                )
+                            ).build()
+                    )
+                    .build()
+            )
+        })
+        .build()
 }
 
 fun generateObjectType(shape: NodeShape, context: ParseContext): GraphQLObjectType {
@@ -142,8 +249,23 @@ fun generateInputType(
     inputTypeConfiguration: InputTypeConfiguration
 ): GraphQLInputObjectType {
     val shapeName = parseName(shape.shapeNode, context)
+    val fixedFields = if (inputTypeConfiguration == InputTypeConfiguration.CREATE_TYPE) {
+        listOf(
+            GraphQLInputObjectField.newInputObjectField()
+                .name("id").type(Scalars.GraphQLID)
+                .description("Optional URI to use as an identifier for the new instance. One of the 'id' or 'slug' fields must be set!")
+                .build(),
+            GraphQLInputObjectField.newInputObjectField()
+                .name("slug")
+                .description("Optional slug that is combined with the context of the request to generate an identifier for the new instance. One of the 'id' or 'slug' fields must be set!")
+                .type(Scalars.GraphQLString)
+                .build()
+        )
+    } else {
+        emptyList()
+    }
     return GraphQLInputObjectType.newInputObject()
-        .name("$inputTypeConfiguration${shapeName}Input")
+        .name("${inputTypeConfiguration.typePrefix}${shapeName}Input")
         .withAppliedDirective(
             isDirective.toAppliedDirective().transform {
                 it.argument(
@@ -152,7 +274,7 @@ fun generateInputType(
                 )
             }
         )
-        .fields(shape.propertyShapes
+        .fields(fixedFields.plus(shape.propertyShapes
             // Only include literal properties
             .filter { property -> property.shapeGraph.getReference(property.shapeNode, SHACL.datatype) != null }
             .map { property ->
@@ -192,7 +314,7 @@ fun generateInputType(
                     )
                     .build()
             }
-        )
+        ))
         .build()
 }
 
@@ -313,4 +435,17 @@ private fun decapitalize(str: String): String {
     return str.replaceFirstChar { it.lowercase(Locale.getDefault()) }
 }
 
+// Get the raw type for a specific type (not wrapped in non-null or list)
+private fun GraphQLType.rawType(): GraphQLType {
+    return if (GraphQLTypeUtil.isNonNull(this)) {
+        GraphQLTypeUtil.unwrapNonNull(this).rawType()
+    } else if (GraphQLTypeUtil.isList(this)) {
+        GraphQLTypeUtil.unwrapOne(this).rawType()
+    } else {
+        this
+    }
+}
 
+private fun GraphQLType.isScalar(): Boolean {
+    return GraphQLTypeUtil.isScalar(this)
+}

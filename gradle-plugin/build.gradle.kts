@@ -10,7 +10,7 @@ dependencies {
     implementation("com.graphql-java:graphql-java:20.0")
     api("com.apollographql.apollo3:com.apollographql.apollo3.gradle.plugin:3.7.4")
     implementation("com.apollographql.apollo3.external:com.apollographql.apollo3.external.gradle.plugin:3.7.4")
-
+    testImplementation(kotlin("test"))
 }
 
 repositories {
@@ -37,8 +37,12 @@ tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile> {
     kotlinOptions.javaParameters = true
 }
 
+tasks.test {
+    useJUnitPlatform()
+}
+
 group = "be.solidlab.sdx"
-version = "0.1"
+version = "0.2"
 
 publishing {
     repositories {

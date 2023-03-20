@@ -68,7 +68,7 @@ class SolidGradlePlugin : Plugin<Project> {
                 println("Generating GraphQL schema from installed Shapes...")
                 val graphqlDir = project.layout.projectDirectory.dir("src/main/graphql")
                 graphqlDir.asFile.mkdirs()
-                val schema = SHACLToGraphQL.getSchema(shapeDir.get(), shapeImports)
+                val schema = SHACLToGraphQL.getSchema(shapeDir.get().asFile, shapeImports)
                 Files.writeString(graphqlDir.file("schema.graphqls").asFile.toPath(), schema)
             }
         }
