@@ -138,3 +138,7 @@ fun Graph.encodeAsTurtle(): String {
         writer.toString()
     }
 }
+
+fun main() {
+    println(convertToRDF( contact).encodeAsTurtle())
+}

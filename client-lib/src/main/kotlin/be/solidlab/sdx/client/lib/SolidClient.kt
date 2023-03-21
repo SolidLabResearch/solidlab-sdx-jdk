@@ -6,12 +6,11 @@ import com.apollographql.apollo3.api.ExecutionContext
 import com.apollographql.apollo3.api.Mutation
 import com.apollographql.apollo3.api.Query
 import com.apollographql.apollo3.network.NetworkTransport
+import java.net.URI
+import java.net.URL
 
 data class SolidClient<C : SolidTargetBackendContext>(
-    val backend: SolidTargetBackend<C>,
-    val podUrl: String? = null,
-    val clientID: String? = null,
-    val secret: String? = null
+    val backend: SolidTargetBackend<C>
 ) {
 
     private val apolloClient = ApolloClient.Builder()
@@ -35,7 +34,8 @@ interface SolidTargetBackend<T : SolidTargetBackendContext> : NetworkTransport
 
 interface SolidTargetBackendContext
 
-class SolidExecutionContext(val backendContext: SolidTargetBackendContext) : ExecutionContext.Element {
+class SolidExecutionContext(val backendContext: SolidTargetBackendContext) :
+    ExecutionContext.Element {
 
     override val key: ExecutionContext.Key<*>
         get() = Key

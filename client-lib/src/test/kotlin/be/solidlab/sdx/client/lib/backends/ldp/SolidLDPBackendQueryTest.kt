@@ -5,16 +5,17 @@ import io.vertx.core.Vertx
 import io.vertx.core.json.JsonObject
 import kotlinx.coroutines.future.await
 import kotlinx.coroutines.runBlocking
+import org.apache.http.HttpHeaders
 import org.junit.jupiter.api.AfterAll
 import org.junit.jupiter.api.BeforeAll
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
-class SolidLDPBackendTest {
+class SolidLDPBackendQueryTest {
 
-    private val backend = SolidLDPBackend("src/test/resources/graphql/schema.graphqls")
+    private val backend = SolidLDPBackend(schemaFile = "src/test/resources/graphql/schema.graphqls")
     private val defaultLdpContext =
-        SolidLDPContext(target = "http://localhost:${httpServer.actualPort()}/contacts/jdoe.ttl")
+        SolidLDPContext(resolver = StaticTargetResolver("http://localhost:${httpServer.actualPort()}/contacts/jdoe.ttl"))
 
     companion object {
 
@@ -25,7 +26,8 @@ class SolidLDPBackendTest {
         @BeforeAll
         fun setup(): Unit = runBlocking {
             httpServer.requestHandler { request ->
-                request.response().end(
+                request.response().putHeader(HttpHeaders.CONTENT_TYPE, "text/turtle")
+                    .putHeader("Link", "\t<http://www.w3.org/ns/ldp#Resource>; rel=\"type\"").end(
                     testGraphs[request.path()]?.let { convertToRDF(it).encodeAsTurtle() }
                         ?: throw RuntimeException("Path not found!")
                 )
@@ -112,21 +114,21 @@ class SolidLDPBackendTest {
             backend.execute(
                 """
             {
-              contacts {
+              contactCollection {
                 id
                 givenName
                 familyName
               }
             }
         """.trimIndent(),
-                SolidLDPContext(target = "http://localhost:${httpServer.actualPort()}/contacts/contacts.ttl"),
+                SolidLDPContext(resolver = StaticTargetResolver("http://localhost:${httpServer.actualPort()}/contacts/contacts.ttl")),
                 mapOf()
             )
         )
 
         assertEquals(
             contacts.map { Triple(it.id, it.givenName, it.familyName) }.sortedBy { it.first },
-            result.getJsonObject("data").getJsonArray("contacts").map {
+            result.getJsonObject("data").getJsonArray("contactCollection").map {
                 it as JsonObject
                 Triple(it.getString("id"), it.getString("givenName"), it.getString("familyName"))
             }.sortedBy { it.first })
@@ -138,7 +140,7 @@ class SolidLDPBackendTest {
             backend.execute(
                 """
             {
-              addresses {
+              addressCollection {
                 streetLine
                 city
                 postalCode
@@ -156,7 +158,7 @@ class SolidLDPBackendTest {
                     it.postalCode
                 )
             }.sortedBy { it.first },
-            result.getJsonObject("data").getJsonArray("addresses").map {
+            result.getJsonObject("data").getJsonArray("addressCollection").map {
                 it as JsonObject
                 Triple(it.getString("streetLine"), it.getString("city"), it.getString("postalCode"))
             }.sortedBy { it.first })

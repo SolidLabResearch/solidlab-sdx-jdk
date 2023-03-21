@@ -13,23 +13,47 @@ import graphql.schema.idl.*
 import io.vertx.core.Vertx
 import io.vertx.core.json.Json
 import io.vertx.ext.web.client.WebClient
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.future.await
+import kotlinx.coroutines.future.future
+import org.apache.http.HttpHeaders
 import org.apache.jena.graph.*
 import org.apache.jena.graph.impl.LiteralLabel
 import org.apache.jena.riot.Lang
 import org.apache.jena.riot.RDFParserBuilder
+import org.apache.jena.sparql.graph.GraphFactory
 import org.apache.jena.vocabulary.RDF
 import java.io.File
 import java.io.StringReader
+import java.net.MalformedURLException
+import java.net.URL
 import java.util.*
 import java.util.concurrent.CompletionStage
 
-data class SolidLDPContext(val target: String) : SolidTargetBackendContext
+const val MUTATION_OPERATION_NAME = "MUTATION"
+const val CONTENT_TYPE_TURTLE = "text/turtle"
+const val LINK_HEADER = "Link"
+const val IS_CONTAINER_LINK_HEADER_VAL = "<http://www.w3.org/ns/ldp#Container>; rel=\"type\""
+const val IS_RESOURCE_LiNK_HEADER_VAL = "<http://www.w3.org/ns/ldp#Resource>; rel=\"type\""
+val LDP_CONTAINS = NodeFactory.createURI("http://www.w3.org/ns/ldp#contains")
 
-class SolidLDPBackend(private val schemaFile: String = "src/main/graphql/schema.graphqls") :
+data class SolidLDPContext(val resolver: TargetResolver) : SolidTargetBackendContext
+
+data class SolidLDPBackend(
+    private val podUrl: String? = null,
+    private val clientID: String? = null,
+    private val secret: String? = null,
+    private val schemaFile: String = "src/main/graphql/schema.graphqls"
+) :
     SolidTargetBackend<SolidLDPContext> {
+
+    init {
+        // Validation of constructor arguments
+        require(podUrl != null || clientID == null) { "When using client authentication, a podUrl must be provided!" }
+        require(secret != null || clientID == null) { "When using client authentication, a client secret must be provided!" }
+    }
 
     private val vertx = Vertx.vertx()
     private val webClient = WebClient.create(vertx)
@@ -89,7 +113,11 @@ class SolidLDPBackend(private val schemaFile: String = "src/main/graphql/schema.
                             handleRelationProperty(runtimeEnv)
                         }
                     } else {
-                        handleEntrypoint(runtimeEnv)
+                        if (runtimeEnv.operationDefinition.operation.name == MUTATION_OPERATION_NAME) {
+                            handleMutationEntrypoint(runtimeEnv)
+                        } else {
+                            handleEntrypoint(runtimeEnv)
+                        }
                     }
                 }
             }
@@ -119,32 +147,94 @@ class SolidLDPBackend(private val schemaFile: String = "src/main/graphql/schema.
         return if (isCollectionType(runtimeEnv.fieldType)) result.toList() else result.asSequence().firstOrNull()
     }
 
-    private fun handleEntrypoint(runtimeEnv: DataFetchingEnvironment): CompletionStage<Any?> {
-        val targetUri = runtimeEnv.getLocalContext<SolidLDPContext>().target
-        val type = getTypeClassURI(runtimeEnv.fieldType)
-        return downloadDocumentGraph(targetUri).thenApply { documentGraph ->
-            if (runtimeEnv.containsArgument("id")) {
-                // Specific instance entrypoint
-                documentGraph.find(
-                    NodeFactory.createURI(runtimeEnv.getArgument("id")),
-                    RDF.type.asNode(),
-                    type
-                ).mapWith { IntermediaryResult(documentGraph, it.subject) }.asSequence().firstOrNull()
+    private fun handleEntrypoint(runtimeEnv: DataFetchingEnvironment): CompletionStage<Any?> =
+        CoroutineScope(Dispatchers.IO).future {
+            val classUri = getTypeClassURI(runtimeEnv.fieldType)
+            val targetUrl = runtimeEnv.getLocalContext<SolidLDPContext>().resolver.resolve(
+                classUri.uri.toString(),
+                object : TargetResolverContext {})
+            if (targetUrl != null) {
+                val resourceType = fetchResourceType(targetUrl)
+                if (runtimeEnv.containsArgument("id")) {
+                    val documentUrl =
+                        if (resourceType == ResourceType.DOCUMENT) targetUrl else getAbsoluteURL(
+                            runtimeEnv.getArgument(
+                                "id"
+                            ), targetUrl
+                        )
+                    if (!documentUrl.toString().startsWith(targetUrl.toString())) {
+                        throw IllegalArgumentException("Entity with id $documentUrl is not in range of target URL $targetUrl")
+                    }
+                    val documentGraph = downloadDocumentGraph(documentUrl)
+                    // Specific instance entrypoint
+                    documentGraph.find(
+                        NodeFactory.createURI(runtimeEnv.getArgument("id")),
+                        RDF.type.asNode(),
+                        classUri
+                    ).mapWith { IntermediaryResult(documentGraph, it.subject) }.asSequence().firstOrNull()
+                } else {
+                    // Collection entrypoint
+                    val documentGraph =
+                        if (resourceType == ResourceType.DOCUMENT) downloadDocumentGraph(targetUrl) else downloadContainerAsGraph(
+                            targetUrl
+                        )
+                    documentGraph.find(
+                        Node.ANY,
+                        RDF.type.asNode(),
+                        classUri
+                    ).mapWith { IntermediaryResult(documentGraph, it.subject) }.toList()
+                }
             } else {
-                // Collection entrypoint
-                documentGraph.find(
-                    Node.ANY,
-                    RDF.type.asNode(),
-                    type
-                ).mapWith { IntermediaryResult(documentGraph, it.subject) }.toList()
+                throw RuntimeException("A target URL for this request could not be resolved!")
             }
         }
+
+    private fun handleMutationEntrypoint(runtimeEnv: DataFetchingEnvironment): CompletionStage<Any?> =
+        CoroutineScope(Dispatchers.IO).future {
+            if (runtimeEnv.field.name.startsWith("create")) {
+                val classUri = getTypeClassURI(runtimeEnv.fieldType)
+                val targetUrl = runtimeEnv.getLocalContext<SolidLDPContext>().resolver.resolve(
+                    classUri.uri.toString(),
+                    object : TargetResolverContext {})
+                if (targetUrl != null) {
+                    TODO()
+                } else {
+                    throw RuntimeException("A target URL for this request could not be resolved!")
+                }
+            } else {
+                TODO()
+            }
+        }
+
+    private suspend fun downloadDocumentGraph(url: URL): Graph {
+        val resp = webClient.getAbs(url.toString()).putHeader(HttpHeaders.ACCEPT, CONTENT_TYPE_TURTLE).send()
+            .toCompletionStage().await()
+        val document = resp.bodyAsString()
+        return RDFParserBuilder.create().source(StringReader(document)).lang(Lang.TURTLE).toGraph()
     }
 
-    private fun downloadDocumentGraph(url: String): CompletionStage<Graph> {
-        return webClient.getAbs(url).send().toCompletionStage().thenApply { resp ->
-            val document = resp.bodyAsString()
-            RDFParserBuilder.create().source(StringReader(document)).lang(Lang.TURTLE).toGraph()
+    private suspend fun downloadContainerAsGraph(url: URL): Graph {
+        val containerResp = webClient.getAbs(url.toString()).putHeader(HttpHeaders.ACCEPT, CONTENT_TYPE_TURTLE).send()
+            .toCompletionStage().await().bodyAsString()
+        val containerIndex = RDFParserBuilder.create().source(containerResp).lang(Lang.TURTLE).toGraph()
+        val resultGraph = GraphFactory.createDefaultGraph()
+        containerIndex.find(Node.ANY, LDP_CONTAINS, Node.ANY).asSequence().asFlow()
+            .map { containedResource ->
+                val subGraph = downloadDocumentGraph(URL(containedResource.`object`.uri))
+                subGraph.find().forEach { resultGraph.add(it) }
+            }
+        return resultGraph
+    }
+
+    private suspend fun fetchResourceType(url: URL): ResourceType {
+        val resp = webClient.headAbs(url.toString()).send().toCompletionStage().await()
+        // Get type using link header
+        return if (resp.headers().getAll(LINK_HEADER).any { it == IS_CONTAINER_LINK_HEADER_VAL }) {
+            ResourceType.CONTAINER
+        } else if (resp.headers().getAll(LINK_HEADER).any { it == IS_RESOURCE_LiNK_HEADER_VAL }) {
+            ResourceType.DOCUMENT
+        } else {
+            throw RuntimeException("The target URL does not represent an LDP container or resource type!")
         }
     }
 
@@ -182,6 +272,18 @@ class SolidLDPBackend(private val schemaFile: String = "src/main/graphql/schema.
             else -> null
         }
     }
+
+    private fun getAbsoluteURL(urlOrRelativePath: String, baseUrl: URL): URL {
+        return try {
+            URL(urlOrRelativePath)
+        } catch (err: MalformedURLException) {
+            URL("${baseUrl.toString()}/${urlOrRelativePath.removePrefix("/")}")
+        }
+    }
 }
 
 private data class IntermediaryResult(val documentGraph: Graph, val subject: Node)
+
+private enum class ResourceType {
+    CONTAINER, DOCUMENT
+}

@@ -12,6 +12,8 @@ dependencies {
     implementation(platform("io.vertx:vertx-stack-depchain:$vertxVersion"))
     implementation("io.vertx:vertx-core")
     implementation("io.vertx:vertx-web-client")
+    implementation("io.vertx:vertx-auth-oauth2")
+    implementation("com.nimbusds:nimbus-jose-jwt:9.31")
     implementation("io.vertx:vertx-lang-kotlin")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-jdk8:1.6.4")
     implementation("org.jetbrains.kotlin:kotlin-reflect:1.7.20")
