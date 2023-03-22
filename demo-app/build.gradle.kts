@@ -1,10 +1,11 @@
 plugins {
-    kotlin("jvm") version "1.7.20"
-    id("be.solidlab.sdx-plugin") version "0.1"
+    kotlin("jvm")
+    id("be.solidlab.sdx-plugin") version "1.0-SNAPSHOT"
+    `maven-publish`
 }
 
 dependencies {
-    implementation("be.solidlab.sdx:solid-sdx-client:0.1")
+    implementation(project(":client-lib"))
 }
 
 repositories {
@@ -13,7 +14,7 @@ repositories {
 }
 
 group = "be.solidlab.sdx"
-version = "0.1"
+version = "1.0-SNAPSHOT"
 
 java {
     sourceCompatibility = JavaVersion.VERSION_17
@@ -27,7 +28,9 @@ tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile> {
 
 sdx {
     importShapesFromURL.addAll(
-        "https://cloud.ilabt.imec.be/index.php/s/w3Hr9MENpM7fMBE/download/contact-SHACL.ttl"
+        "https://cloud.ilabt.imec.be/index.php/s/w3Hr9MENpM7fMBE/download/contact-SHACL.ttl",
+//        "https://data.vlaanderen.be/shacl/adresregister-SHACL.ttl",
+//        "https://data.vlaanderen.be/shacl/persoon-basis-SHACL.ttl"
     )
     packageName.set("be.solid.sdx.demo.queries")
 }

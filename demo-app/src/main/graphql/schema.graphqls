@@ -12,7 +12,7 @@ directive @include(
     if: Boolean!
   ) on FIELD | FRAGMENT_SPREAD | INLINE_FRAGMENT
 
-directive @is(class: String) on OBJECT
+directive @is(class: String, importedFrom: String) on OBJECT
 
 directive @property(iri: String) on FIELD_DEFINITION
 
@@ -28,7 +28,7 @@ directive @specifiedBy(
     url: String!
   ) on SCALAR
 
-type Address @is(class : "http://schema.org/PostalAddress") {
+type Address @is(class : "http://schema.org/PostalAddress", importedFrom : "https://cloud.ilabt.imec.be/index.php/s/w3Hr9MENpM7fMBE/download/contact-SHACL.ttl") {
   city: String! @property(iri : "<http://schema.org/addressLocality>")
   country: String! @property(iri : "<http://schema.org/addressCountry>")
   "Auto-generated property that will be assigned to the `iri` of the Thing that is being queried."
@@ -37,7 +37,7 @@ type Address @is(class : "http://schema.org/PostalAddress") {
   streetLine: String! @property(iri : "<http://schema.org/streetAddress>")
 }
 
-type Contact @is(class : "http://schema.org/Person") {
+type Contact @is(class : "http://schema.org/Person", importedFrom : "https://cloud.ilabt.imec.be/index.php/s/w3Hr9MENpM7fMBE/download/contact-SHACL.ttl") {
   address: Address @property(iri : "<http://schema.org/address>")
   email: [String]! @property(iri : "<http://schema.org/email>")
   familyName: String! @property(iri : "<http://schema.org/familyName>")
@@ -47,7 +47,7 @@ type Contact @is(class : "http://schema.org/Person") {
   worksFor: [Organization]! @property(iri : "<http://schema.org/worksFor>")
 }
 
-type Organization @is(class : "http://schema.org/Organization") {
+type Organization @is(class : "http://schema.org/Organization", importedFrom : "https://cloud.ilabt.imec.be/index.php/s/w3Hr9MENpM7fMBE/download/contact-SHACL.ttl") {
   address: Address @property(iri : "<http://schema.org/address>")
   "Auto-generated property that will be assigned to the `iri` of the Thing that is being queried."
   id: ID! @identifier

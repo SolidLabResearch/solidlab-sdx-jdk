@@ -1,10 +1,11 @@
 plugins {
-    kotlin("jvm") version "1.7.20"
+    kotlin("jvm")
     `java-gradle-plugin`
     `maven-publish`
 }
 
 dependencies {
+    implementation(project(":commons"))
     implementation(kotlin("stdlib", "1.7.20"))
     implementation("org.apache.jena:jena-shacl:4.7.0")
     implementation("com.graphql-java:graphql-java:20.0")
@@ -42,7 +43,7 @@ tasks.test {
 }
 
 group = "be.solidlab.sdx"
-version = "0.2"
+version = "1.0-SNAPSHOT"
 
 publishing {
     repositories {

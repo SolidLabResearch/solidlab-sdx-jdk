@@ -7,7 +7,6 @@ plugins {
 val vertxVersion = "4.4.0"
 
 dependencies {
-    implementation(project(":commons"))
     implementation("org.apache.jena:jena-shacl:4.7.0")
     implementation("com.graphql-java:graphql-java:20.0")
     implementation(platform("io.vertx:vertx-stack-depchain:$vertxVersion"))
@@ -28,7 +27,7 @@ repositories {
 }
 
 group = "be.solidlab.sdx"
-version = "1.0-SNAPSHOT"
+version = "0.1"
 
 java {
     sourceCompatibility = JavaVersion.VERSION_17

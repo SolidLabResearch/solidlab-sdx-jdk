@@ -10,14 +10,16 @@ import kotlinx.coroutines.future.await
 import kotlinx.coroutines.runBlocking
 import org.apache.http.HttpHeaders
 import org.junit.jupiter.api.AfterAll
+import org.junit.jupiter.api.Assertions
 import org.junit.jupiter.api.BeforeAll
 import kotlin.test.Test
 
 class SolidLDPBackendMutationTest {
 
     private val backend = SolidLDPBackend(schemaFile = "src/test/resources/graphql/schema.graphqls")
+    private val targetUrl = "http://localhost:${httpServer.actualPort()}/contacts/jdoe.ttl"
     private val defaultLdpContext =
-        SolidLDPContext(resolver = StaticTargetResolver("http://localhost:${httpServer.actualPort()}/contacts/jdoe.ttl"))
+        SolidLDPContext(resolver = StaticTargetResolver(targetUrl))
 
     companion object {
 
@@ -33,6 +35,7 @@ class SolidLDPBackendMutationTest {
                         .putHeader("Link", "\t<http://www.w3.org/ns/ldp#Resource>; rel=\"type\"").end()
 
                     HttpMethod.POST -> request.response().setStatusCode(201).end()
+                    HttpMethod.PATCH -> request.response().setStatusCode(204).end()
                     HttpMethod.PUT -> request.response().setStatusCode(204).end()
                     else -> request.response().setStatusCode(500).end("Unexpected request")
                 }
@@ -49,17 +52,22 @@ class SolidLDPBackendMutationTest {
     }
 
     @Test
-    fun testCreateAddress() = runBlocking {
+    fun testCreateAddress(): Unit = runBlocking {
+        val slug = "test-address"
+        val streetLine = "Some Street 99"
+        val city = "Some City"
+        val postalCode = "9999"
+        val country = "Some Country"
         val result = JsonObject(
             backend.execute(
                 """
             mutation {
                 createAddress(input: {
-                    slug: "test-address"
-                    streetLine: "Some Street 99"
-                    city: "Some City"
-                    postalCode: "9999"
-                    country: "Some Country"
+                    slug: "$slug"
+                    streetLine: "$streetLine"
+                    city: "$city"
+                    postalCode: "$postalCode"
+                    country: "$country"
                 }) {
                   id
                   streetLine
@@ -71,7 +79,16 @@ class SolidLDPBackendMutationTest {
         """.trimIndent(), defaultLdpContext, mapOf()
             )
         )
+
         println(result)
+
+        result.getJsonObject("data").getJsonObject("createAddress").apply {
+            Assertions.assertEquals("$targetUrl#$slug", this.getString("id"))
+            Assertions.assertEquals(streetLine, this.getString("streetLine"))
+            Assertions.assertEquals(city, this.getString("city"))
+            Assertions.assertEquals(postalCode, this.getString("postalCode"))
+            Assertions.assertEquals(country, this.getString("country"))
+        }
     }
 
 }

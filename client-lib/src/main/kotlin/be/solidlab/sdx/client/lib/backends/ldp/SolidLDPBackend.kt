@@ -1,46 +1,28 @@
 package be.solidlab.sdx.client.lib.backends.ldp
 
+import be.solidlab.sdx.client.commons.graphql.isScalar
+import be.solidlab.sdx.client.commons.graphql.rawType
+import be.solidlab.sdx.client.commons.ldp.LdpClient
 import be.solidlab.sdx.client.lib.SolidExecutionContext
 import be.solidlab.sdx.client.lib.SolidTargetBackend
 import be.solidlab.sdx.client.lib.SolidTargetBackendContext
+import be.solidlab.sdx.client.lib.backends.ldp.impl.MutationHandler
+import be.solidlab.sdx.client.lib.backends.ldp.impl.QueryHandler
 import com.apollographql.apollo3.annotations.ApolloExperimental
 import com.apollographql.apollo3.api.*
 import graphql.ExecutionInput
 import graphql.GraphQL
-import graphql.Scalars
 import graphql.schema.*
 import graphql.schema.idl.*
 import io.vertx.core.Vertx
-import io.vertx.core.buffer.Buffer
 import io.vertx.core.json.Json
-import io.vertx.ext.web.client.WebClient
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.future.await
-import kotlinx.coroutines.future.future
-import org.apache.http.HttpHeaders
 import org.apache.jena.graph.*
-import org.apache.jena.graph.impl.LiteralLabel
-import org.apache.jena.riot.Lang
-import org.apache.jena.riot.RDFDataMgr
-import org.apache.jena.riot.RDFParserBuilder
-import org.apache.jena.sparql.graph.GraphFactory
-import org.apache.jena.vocabulary.RDF
 import java.io.File
-import java.io.StringReader
-import java.io.StringWriter
-import java.net.MalformedURLException
-import java.net.URL
 import java.util.*
-import java.util.concurrent.CompletionStage
 
 const val MUTATION_OPERATION_NAME = "MUTATION"
-const val CONTENT_TYPE_TURTLE = "text/turtle"
-const val LINK_HEADER = "Link"
-const val IS_CONTAINER_LINK_HEADER_VAL = "<http://www.w3.org/ns/ldp#Container>; rel=\"type\""
-const val IS_RESOURCE_LiNK_HEADER_VAL = "<http://www.w3.org/ns/ldp#Resource>; rel=\"type\""
-val LDP_CONTAINS = NodeFactory.createURI("http://www.w3.org/ns/ldp#contains")
 
 data class SolidLDPContext(val resolver: TargetResolver) : SolidTargetBackendContext
 
@@ -59,10 +41,14 @@ data class SolidLDPBackend(
     }
 
     private val vertx = Vertx.vertx()
-    private val webClient = WebClient.create(vertx)
+    private val ldpClient = LdpClient(vertx)
+    private val queryHandler = QueryHandler(ldpClient)
+    private val mutationHandler = MutationHandler(ldpClient)
     private val graphql = buildGraphQL()
 
-    override fun dispose() {}
+    override fun dispose() {
+        vertx.close().result()
+    }
 
     @OptIn(ApolloExperimental::class)
     override fun <D : Operation.Data> execute(request: ApolloRequest<D>): Flow<ApolloResponse<D>> = flow {
@@ -108,18 +94,18 @@ data class SolidLDPBackend(
             override fun getDataFetcher(setupEnv: FieldWiringEnvironment): DataFetcher<*> {
                 return DataFetcher { runtimeEnv ->
                     if (setupEnv.directives.any { it.name == "identifier" }) {
-                        handleIdProperty(runtimeEnv)
+                        queryHandler.handleIdProperty(runtimeEnv)
                     } else if (setupEnv.directives.any { it.name == "property" }) {
-                        if (isScalarType(runtimeEnv.fieldType)) {
-                            handleScalarProperty(runtimeEnv)
+                        if (runtimeEnv.fieldType.rawType().isScalar()) {
+                            queryHandler.handleScalarProperty(runtimeEnv)
                         } else {
-                            handleRelationProperty(runtimeEnv)
+                            queryHandler.handleRelationProperty(runtimeEnv)
                         }
                     } else {
                         if (runtimeEnv.operationDefinition.operation.name == MUTATION_OPERATION_NAME) {
-                            handleMutationEntrypoint(runtimeEnv)
+                            mutationHandler.handleMutationEntrypoint(runtimeEnv)
                         } else {
-                            handleEntrypoint(runtimeEnv)
+                            queryHandler.handleEntrypoint(runtimeEnv)
                         }
                     }
                 }
@@ -127,230 +113,4 @@ data class SolidLDPBackend(
         }
         return RuntimeWiring.newRuntimeWiring().wiringFactory(dynamicWiringFactory).build()
     }
-
-    private fun handleIdProperty(runtimeEnv: DataFetchingEnvironment): String {
-        return runtimeEnv.getSource<IntermediaryResult>().subject.toString(false)
-    }
-
-    private fun handleScalarProperty(runtimeEnv: DataFetchingEnvironment): Any? {
-        val source = runtimeEnv.getSource<IntermediaryResult>()
-        val result = source.documentGraph
-            .find(source.subject, getPropertyPath(runtimeEnv), Node.ANY)
-            .mapWith { convertScalarValue(GraphQLTypeUtil.unwrapAll(runtimeEnv.fieldType), it.`object`.literal) }
-        return if (isCollectionType(runtimeEnv.fieldType)) result.toList() else result.asSequence().firstOrNull()
-    }
-
-    private fun handleRelationProperty(runtimeEnv: DataFetchingEnvironment): Any? {
-        val source = runtimeEnv.getSource<IntermediaryResult>()
-        val type = getTypeClassURI(runtimeEnv.fieldType)
-        val result = source.documentGraph
-            .find(source.subject, getPropertyPath(runtimeEnv), Node.ANY)
-            .filterKeep { source.documentGraph.find(it.`object`, RDF.type.asNode(), type).hasNext() }
-            .mapWith { IntermediaryResult(source.documentGraph, it.`object`) }
-        return if (isCollectionType(runtimeEnv.fieldType)) result.toList() else result.asSequence().firstOrNull()
-    }
-
-    private fun handleEntrypoint(runtimeEnv: DataFetchingEnvironment): CompletionStage<Any?> =
-        CoroutineScope(Dispatchers.IO).future {
-            val classUri = getTypeClassURI(runtimeEnv.fieldType)
-            val targetUrl = runtimeEnv.getLocalContext<SolidLDPContext>().resolver.resolve(
-                classUri.uri.toString(),
-                object : TargetResolverContext {})
-            if (targetUrl != null) {
-                val resourceType = fetchResourceType(targetUrl)
-                if (runtimeEnv.containsArgument("id")) {
-                    val documentUrl =
-                        if (resourceType == ResourceType.DOCUMENT) targetUrl else getAbsoluteURL(
-                            runtimeEnv.getArgument(
-                                "id"
-                            ), targetUrl
-                        )
-                    if (!documentUrl.toString().startsWith(targetUrl.toString())) {
-                        throw IllegalArgumentException("Entity with id $documentUrl is not in range of target URL $targetUrl")
-                    }
-                    val documentGraph = downloadDocumentGraph(documentUrl)
-                    // Specific instance entrypoint
-                    documentGraph.find(
-                        NodeFactory.createURI(runtimeEnv.getArgument("id")),
-                        RDF.type.asNode(),
-                        classUri
-                    ).mapWith { IntermediaryResult(documentGraph, it.subject) }.asSequence().firstOrNull()
-                } else {
-                    // Collection entrypoint
-                    val documentGraph =
-                        if (resourceType == ResourceType.DOCUMENT) downloadDocumentGraph(targetUrl) else downloadContainerAsGraph(
-                            targetUrl
-                        )
-                    documentGraph.find(
-                        Node.ANY,
-                        RDF.type.asNode(),
-                        classUri
-                    ).mapWith { IntermediaryResult(documentGraph, it.subject) }.toList()
-                }
-            } else {
-                throw RuntimeException("A target URL for this request could not be resolved!")
-            }
-        }
-
-    private fun handleMutationEntrypoint(runtimeEnv: DataFetchingEnvironment): CompletionStage<Any?> =
-        CoroutineScope(Dispatchers.IO).future {
-            if (runtimeEnv.field.name.startsWith("create")) {
-                val classUri = getTypeClassURI(runtimeEnv.fieldType)
-                val targetUrl = runtimeEnv.getLocalContext<SolidLDPContext>().resolver.resolve(
-                    classUri.uri.toString(),
-                    object : TargetResolverContext {})
-                if (targetUrl != null) {
-                    val id = NodeFactory.createURI("#test")
-                    val content = generateTriplesForInput(
-                        id,
-                        runtimeEnv.getArgument("input"),
-                        GraphQLTypeUtil.unwrapNonNull(runtimeEnv.fieldDefinition.getArgument("input").type) as GraphQLInputObjectType
-                    )
-                    when (fetchResourceType(targetUrl)) {
-                        ResourceType.DOCUMENT -> {
-                            // Append triples to doc using patch
-                            patchDocument(targetUrl, content)
-                        }
-
-                        ResourceType.CONTAINER -> {
-                            // Post triples as new document in the container
-                            postDocument(targetUrl, content)
-                        }
-                    }
-                    IntermediaryResult(content, id)
-                } else {
-                    throw RuntimeException("A target URL for this request could not be resolved!")
-                }
-            } else {
-                TODO()
-            }
-        }
-
-    private suspend fun downloadDocumentGraph(url: URL): Graph {
-        val resp = webClient.getAbs(url.toString()).putHeader(HttpHeaders.ACCEPT, CONTENT_TYPE_TURTLE).send()
-            .toCompletionStage().await()
-        val document = resp.bodyAsString()
-        return RDFParserBuilder.create().source(StringReader(document)).lang(Lang.TURTLE).toGraph()
-    }
-
-    private suspend fun downloadContainerAsGraph(url: URL): Graph {
-        val containerResp = webClient.getAbs(url.toString()).putHeader(HttpHeaders.ACCEPT, CONTENT_TYPE_TURTLE).send()
-            .toCompletionStage().await().bodyAsString()
-        val containerIndex = RDFParserBuilder.create().source(containerResp).lang(Lang.TURTLE).toGraph()
-        val resultGraph = GraphFactory.createDefaultGraph()
-        containerIndex.find(Node.ANY, LDP_CONTAINS, Node.ANY).asSequence().asFlow()
-            .map { containedResource ->
-                val subGraph = downloadDocumentGraph(URL(containedResource.`object`.uri))
-                subGraph.find().forEach { resultGraph.add(it) }
-            }
-        return resultGraph
-    }
-
-    private suspend fun postDocument(url: URL, content: Graph) {
-        val requestBody = StringWriter().use {
-            RDFDataMgr.write(it, content, Lang.TURTLE)
-            it.toString()
-        }
-        val resp = webClient.postAbs(url.toString()).putHeader(HttpHeaders.CONTENT_TYPE, CONTENT_TYPE_TURTLE)
-            .sendBuffer(Buffer.buffer(requestBody)).toCompletionStage().await()
-        if (resp.statusCode() !in 200..399) {
-            throw RuntimeException("The post was not completed successfully (status: ${resp.statusCode()}, message: ${resp.bodyAsString()})")
-        }
-    }
-
-    private suspend fun patchDocument(url: URL, inserts: Graph) {
-        val n3Inserts = StringWriter().use { writer ->
-            RDFDataMgr.write(writer, inserts, Lang.N3)
-            writer.toString()
-        }
-        val requestBody =
-            "@prefix solid: <http://www.w3.org/ns/solid/terms#>. _:rename a solid:InsertDeletePatch; solid:inserts { $n3Inserts }."
-
-        val resp = webClient.patchAbs(url.toString()).putHeader(HttpHeaders.CONTENT_TYPE, "text/n3")
-            .sendBuffer(Buffer.buffer(requestBody)).toCompletionStage().await()
-        if (resp.statusCode() !in 200..399) {
-            throw RuntimeException("The patch was not completed successfully (status: ${resp.statusCode()}, message: ${resp.bodyAsString()})")
-        }
-    }
-
-    private suspend fun fetchResourceType(url: URL): ResourceType {
-        val resp = webClient.headAbs(url.toString()).send().toCompletionStage().await()
-        // Get type using link header
-        return if (resp.headers().getAll(LINK_HEADER).any { it == IS_CONTAINER_LINK_HEADER_VAL }) {
-            ResourceType.CONTAINER
-        } else if (resp.headers().getAll(LINK_HEADER).any { it == IS_RESOURCE_LiNK_HEADER_VAL }) {
-            ResourceType.DOCUMENT
-        } else {
-            throw RuntimeException("The target URL does not represent an LDP container or resource type!")
-        }
-    }
-
-    private fun isScalarType(type: GraphQLOutputType): Boolean {
-        return GraphQLTypeUtil.isScalar(type) || GraphQLTypeUtil.isScalar((GraphQLTypeUtil.unwrapAll(type)))
-    }
-
-    private fun isCollectionType(type: GraphQLOutputType): Boolean {
-        return GraphQLTypeUtil.isList(GraphQLTypeUtil.unwrapNonNull(type))
-    }
-
-    private fun getPropertyPath(runtimeEnv: DataFetchingEnvironment): Node {
-        return NodeFactory.createURI(
-            runtimeEnv.fieldDefinition.getAppliedDirective("property").getArgument("iri")
-                .getValue<String>().removeSurrounding("<", ">")
-        )
-    }
-
-    private fun getTypeClassURI(type: GraphQLOutputType) =
-        NodeFactory.createURI(
-            (GraphQLTypeUtil.unwrapAll(type) as GraphQLObjectType).getAppliedDirective("is")
-                .getArgument("class")
-                .getValue<String>()
-        )
-
-    private fun convertScalarValue(type: GraphQLUnmodifiedType, literal: LiteralLabel): Any? {
-        if (!GraphQLTypeUtil.isScalar(type)) {
-            throw IllegalArgumentException("$type is not a scalar type")
-        }
-        return when (type) {
-            Scalars.GraphQLBoolean -> literal.toString(false).toBoolean()
-            Scalars.GraphQLFloat -> literal.toString(false).toFloat()
-            Scalars.GraphQLInt -> literal.toString(false).toInt()
-            Scalars.GraphQLString -> literal.toString(false)
-            else -> null
-        }
-    }
-
-    private fun getAbsoluteURL(urlOrRelativePath: String, baseUrl: URL): URL {
-        return try {
-            URL(urlOrRelativePath)
-        } catch (err: MalformedURLException) {
-            URL("${baseUrl.toString()}/${urlOrRelativePath.removePrefix("/")}")
-        }
-    }
-
-    private fun generateTriplesForInput(
-        subject: Node,
-        input: Map<String, Any?>,
-        inputDefinition: GraphQLInputObjectType
-    ): Graph {
-        val resultGraph = GraphFactory.createDefaultGraph()
-        inputDefinition.fields.filter { it.name != "slug" && it.name != "id" }.forEach { field ->
-            input[field.name]?.let { literalVal ->
-                resultGraph.add(
-                    subject,
-                    NodeFactory.createURI(
-                        field.getAppliedDirective("property").getArgument("iri")
-                            .getValue<String>().removeSurrounding("<", ">")
-                    ), NodeFactory.createLiteral(literalVal.toString())
-                )
-            }
-        }
-        return resultGraph
-    }
-}
-
-private data class IntermediaryResult(val documentGraph: Graph, val subject: Node)
-
-private enum class ResourceType {
-    CONTAINER, DOCUMENT
 }

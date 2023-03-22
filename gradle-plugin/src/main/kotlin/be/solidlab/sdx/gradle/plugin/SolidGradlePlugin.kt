@@ -1,5 +1,6 @@
 package be.solidlab.sdx.gradle.plugin
 
+import be.solidlab.sdx.gradle.plugin.schemagen.SHACLToGraphQL
 import org.gradle.api.Plugin
 import org.gradle.api.Project
 import org.gradle.api.provider.ListProperty
@@ -9,8 +10,6 @@ import java.net.URL
 import java.nio.channels.Channels
 import java.nio.file.Files
 import com.apollographql.apollo3.gradle.internal.DefaultApolloExtension
-
-const val DEFAULT_CATALOG = "https://catalog.solidlab.be/"
 
 interface SdxExtension {
     // Shorthand for importShapes: imports the Shapes from the specified URLs using the default options.
