@@ -11,6 +11,7 @@ import graphql.Scalars
 import graphql.schema.*
 import graphql.schema.idl.*
 import io.vertx.core.Vertx
+import io.vertx.core.buffer.Buffer
 import io.vertx.core.json.Json
 import io.vertx.ext.web.client.WebClient
 import kotlinx.coroutines.CoroutineScope
@@ -22,11 +23,13 @@ import org.apache.http.HttpHeaders
 import org.apache.jena.graph.*
 import org.apache.jena.graph.impl.LiteralLabel
 import org.apache.jena.riot.Lang
+import org.apache.jena.riot.RDFDataMgr
 import org.apache.jena.riot.RDFParserBuilder
 import org.apache.jena.sparql.graph.GraphFactory
 import org.apache.jena.vocabulary.RDF
 import java.io.File
 import java.io.StringReader
+import java.io.StringWriter
 import java.net.MalformedURLException
 import java.net.URL
 import java.util.*
@@ -197,7 +200,24 @@ data class SolidLDPBackend(
                     classUri.uri.toString(),
                     object : TargetResolverContext {})
                 if (targetUrl != null) {
-                    TODO()
+                    val id = NodeFactory.createURI("#test")
+                    val content = generateTriplesForInput(
+                        id,
+                        runtimeEnv.getArgument("input"),
+                        GraphQLTypeUtil.unwrapNonNull(runtimeEnv.fieldDefinition.getArgument("input").type) as GraphQLInputObjectType
+                    )
+                    when (fetchResourceType(targetUrl)) {
+                        ResourceType.DOCUMENT -> {
+                            // Append triples to doc using patch
+                            patchDocument(targetUrl, content)
+                        }
+
+                        ResourceType.CONTAINER -> {
+                            // Post triples as new document in the container
+                            postDocument(targetUrl, content)
+                        }
+                    }
+                    IntermediaryResult(content, id)
                 } else {
                     throw RuntimeException("A target URL for this request could not be resolved!")
                 }
@@ -224,6 +244,33 @@ data class SolidLDPBackend(
                 subGraph.find().forEach { resultGraph.add(it) }
             }
         return resultGraph
+    }
+
+    private suspend fun postDocument(url: URL, content: Graph) {
+        val requestBody = StringWriter().use {
+            RDFDataMgr.write(it, content, Lang.TURTLE)
+            it.toString()
+        }
+        val resp = webClient.postAbs(url.toString()).putHeader(HttpHeaders.CONTENT_TYPE, CONTENT_TYPE_TURTLE)
+            .sendBuffer(Buffer.buffer(requestBody)).toCompletionStage().await()
+        if (resp.statusCode() !in 200..399) {
+            throw RuntimeException("The post was not completed successfully (status: ${resp.statusCode()}, message: ${resp.bodyAsString()})")
+        }
+    }
+
+    private suspend fun patchDocument(url: URL, inserts: Graph) {
+        val n3Inserts = StringWriter().use { writer ->
+            RDFDataMgr.write(writer, inserts, Lang.N3)
+            writer.toString()
+        }
+        val requestBody =
+            "@prefix solid: <http://www.w3.org/ns/solid/terms#>. _:rename a solid:InsertDeletePatch; solid:inserts { $n3Inserts }."
+
+        val resp = webClient.patchAbs(url.toString()).putHeader(HttpHeaders.CONTENT_TYPE, "text/n3")
+            .sendBuffer(Buffer.buffer(requestBody)).toCompletionStage().await()
+        if (resp.statusCode() !in 200..399) {
+            throw RuntimeException("The patch was not completed successfully (status: ${resp.statusCode()}, message: ${resp.bodyAsString()})")
+        }
     }
 
     private suspend fun fetchResourceType(url: URL): ResourceType {
@@ -279,6 +326,26 @@ data class SolidLDPBackend(
         } catch (err: MalformedURLException) {
             URL("${baseUrl.toString()}/${urlOrRelativePath.removePrefix("/")}")
         }
+    }
+
+    private fun generateTriplesForInput(
+        subject: Node,
+        input: Map<String, Any?>,
+        inputDefinition: GraphQLInputObjectType
+    ): Graph {
+        val resultGraph = GraphFactory.createDefaultGraph()
+        inputDefinition.fields.filter { it.name != "slug" && it.name != "id" }.forEach { field ->
+            input[field.name]?.let { literalVal ->
+                resultGraph.add(
+                    subject,
+                    NodeFactory.createURI(
+                        field.getAppliedDirective("property").getArgument("iri")
+                            .getValue<String>().removeSurrounding("<", ">")
+                    ), NodeFactory.createLiteral(literalVal.toString())
+                )
+            }
+        }
+        return resultGraph
     }
 }
 
