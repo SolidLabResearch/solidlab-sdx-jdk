@@ -47,6 +47,7 @@ internal fun generateMutationType(
 ): GraphQLObjectType {
     return GraphQLObjectType.newObject()
         .name("${shapeName}Mutation")
+        .withAppliedDirective(GraphQLAppliedDirective.newDirective(typesMap[shapeName]!!.getAppliedDirective("is")))
         .fields(
             listOf(
                 GraphQLFieldDefinition.newFieldDefinition()

@@ -1,5 +1,6 @@
 package be.solidlab.sdx.client.lib.backends.ldp
 
+import be.solidlab.sdx.client.lib.backends.ldp.data.addresses
 import be.solidlab.sdx.client.lib.backends.ldp.data.convertToRDF
 import be.solidlab.sdx.client.lib.backends.ldp.data.encodeAsTurtle
 import be.solidlab.sdx.client.lib.backends.ldp.data.testGraphs
@@ -17,7 +18,7 @@ import kotlin.test.Test
 class SolidLDPBackendMutationTest {
 
     private val backend = SolidLDPBackend(schemaFile = "src/test/resources/graphql/schema.graphqls")
-    private val targetUrl = "http://localhost:${httpServer.actualPort()}/contacts/jdoe.ttl"
+    private val targetUrl = "http://localhost:${httpServer.actualPort()}/addresses/addresses.ttl"
     private val defaultLdpContext =
         SolidLDPContext(resolver = StaticTargetResolver(targetUrl))
 
@@ -29,17 +30,7 @@ class SolidLDPBackendMutationTest {
         @JvmStatic
         @BeforeAll
         fun setup(): Unit = runBlocking {
-            httpServer.requestHandler { request ->
-                when (request.method()) {
-                    HttpMethod.HEAD -> request.response().putHeader(HttpHeaders.CONTENT_TYPE, "text/turtle")
-                        .putHeader("Link", "\t<http://www.w3.org/ns/ldp#Resource>; rel=\"type\"").end()
-
-                    HttpMethod.POST -> request.response().setStatusCode(201).end()
-                    HttpMethod.PATCH -> request.response().setStatusCode(204).end()
-                    HttpMethod.PUT -> request.response().setStatusCode(204).end()
-                    else -> request.response().setStatusCode(500).end("Unexpected request")
-                }
-            }
+            httpServer.requestHandler(MockedLDPRequestHandler())
             httpServer.listen(0).toCompletionStage().await()
         }
 
@@ -89,6 +80,25 @@ class SolidLDPBackendMutationTest {
             Assertions.assertEquals(postalCode, this.getString("postalCode"))
             Assertions.assertEquals(country, this.getString("country"))
         }
+    }
+
+    @Test
+    fun testDeleteAddress(): Unit = runBlocking {
+        val result = JsonObject(
+            backend.execute(
+                """
+            mutation {
+                mutateAddress(id: "${addresses.random().id}") {
+                    delete {
+                        id
+                    }
+                }
+            }
+        """.trimIndent(), defaultLdpContext, mapOf()
+            )
+        )
+
+        println(result)
     }
 
 }

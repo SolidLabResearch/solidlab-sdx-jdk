@@ -25,13 +25,7 @@ class SolidLDPBackendQueryTest {
         @JvmStatic
         @BeforeAll
         fun setup(): Unit = runBlocking {
-            httpServer.requestHandler { request ->
-                request.response().putHeader(HttpHeaders.CONTENT_TYPE, "text/turtle")
-                    .putHeader("Link", "\t<http://www.w3.org/ns/ldp#Resource>; rel=\"type\"").end(
-                    testGraphs[request.path()]?.let { convertToRDF(it).encodeAsTurtle() }
-                        ?: throw RuntimeException("Path not found!")
-                )
-            }
+            httpServer.requestHandler(MockedLDPRequestHandler())
             httpServer.listen(0).toCompletionStage().await()
         }
 

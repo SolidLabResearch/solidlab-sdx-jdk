@@ -38,7 +38,7 @@ internal class QueryHandler(private val ldpClient: LdpClient) {
         val result = source.documentGraph
             .find(source.subject, getPropertyPath(runtimeEnv), Node.ANY)
             .filterKeep { source.documentGraph.find(it.`object`, RDF.type.asNode(), type).hasNext() }
-            .mapWith { IntermediaryResult(source.requestUrl, source.documentGraph, it.`object`) }
+            .mapWith { IntermediaryResult(source.requestUrl, source.resourceType, source.documentGraph, it.`object`) }
         return if (runtimeEnv.fieldType.unwrapNonNull().isCollection()) result.toList() else result.asSequence()
             .firstOrNull()
     }
@@ -52,22 +52,7 @@ internal class QueryHandler(private val ldpClient: LdpClient) {
             if (targetUrl != null) {
                 val resourceType = ldpClient.fetchResourceType(targetUrl)
                 if (runtimeEnv.containsArgument("id")) {
-                    val documentUrl =
-                        if (resourceType == ResourceType.DOCUMENT) targetUrl else getAbsoluteURL(
-                            runtimeEnv.getArgument(
-                                "id"
-                            ), targetUrl
-                        )
-                    if (!documentUrl.toString().startsWith(targetUrl.toString())) {
-                        throw IllegalArgumentException("Entity with id $documentUrl is not in range of target URL $targetUrl")
-                    }
-                    val documentGraph = ldpClient.downloadDocumentGraph(documentUrl)
-                    // Specific instance entrypoint
-                    documentGraph.find(
-                        NodeFactory.createURI(runtimeEnv.getArgument("id")),
-                        RDF.type.asNode(),
-                        classUri
-                    ).mapWith { IntermediaryResult(targetUrl, documentGraph, it.subject) }.asSequence().firstOrNull()
+                    getInstanceById(ldpClient, targetUrl, runtimeEnv.getArgument("id"), classUri, resourceType)
                 } else {
                     // Collection entrypoint
                     val documentGraph =
@@ -80,7 +65,7 @@ internal class QueryHandler(private val ldpClient: LdpClient) {
                         Node.ANY,
                         RDF.type.asNode(),
                         classUri
-                    ).mapWith { IntermediaryResult(targetUrl, documentGraph, it.subject) }.toList()
+                    ).mapWith { IntermediaryResult(targetUrl, resourceType, documentGraph, it.subject) }.toList()
                 }
             } else {
                 throw RuntimeException("A target URL for this request could not be resolved!")

@@ -1,6 +1,6 @@
 package be.solidlab.sdx.gradle.plugin
 
-import org.gradle.api.file.Directory
+import be.solidlab.sdx.gradle.plugin.schemagen.SHACLToGraphQL
 import org.junit.jupiter.api.Test
 import java.io.File
 import java.nio.file.Files

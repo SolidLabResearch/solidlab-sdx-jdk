@@ -24,14 +24,23 @@ private const val SLUG_FIELD = "slug"
 class MutationHandler(private val ldpClient: LdpClient) {
     fun handleMutationEntrypoint(runtimeEnv: DataFetchingEnvironment): CompletionStage<Any?> =
         CoroutineScope(Dispatchers.IO).future {
-            if (runtimeEnv.field.name.startsWith("create")) {
-                handleCreateMutation(runtimeEnv)
-            } else {
-                TODO()
+            val fieldName = runtimeEnv.field.name
+            when {
+                fieldName.startsWith("create") -> handleCreateMutation(runtimeEnv)
+                fieldName.startsWith("mutate") -> handleGetMutateObjectType(runtimeEnv)
+                fieldName == "update" -> TODO()
+                fieldName == "delete" -> handleDeleteMutation(runtimeEnv)
+                fieldName.startsWith("set") -> TODO()
+                fieldName.startsWith("clear") -> TODO()
+                fieldName.startsWith("add") -> TODO()
+                fieldName.startsWith("remove") -> TODO()
+                fieldName.startsWith("link") -> TODO()
+                fieldName.startsWith("unlink") -> TODO()
+                else -> TODO()
             }
         }
 
-    private suspend fun handleCreateMutation(runtimeEnv: DataFetchingEnvironment): Any? {
+    private suspend fun handleCreateMutation(runtimeEnv: DataFetchingEnvironment): IntermediaryResult {
         val classUri = getTypeClassURI(runtimeEnv.fieldType)
         val targetUrl = runtimeEnv.getLocalContext<SolidLDPContext>().resolver.resolve(
             classUri.uri.toString(),
@@ -48,19 +57,41 @@ class MutationHandler(private val ldpClient: LdpClient) {
                 ResourceType.DOCUMENT -> {
                     // Append triples to doc using patch
                     ldpClient.patchDocument(targetUrl, content)
-                    IntermediaryResult(targetUrl, content, id)
+                    IntermediaryResult(targetUrl, ResourceType.DOCUMENT, content, id)
                 }
 
                 ResourceType.CONTAINER -> {
                     // Post triples as new document in the container
                     val newDocumentURL = getNewDocumentURL(targetUrl, input)
                     ldpClient.putDocument(newDocumentURL, content)
-                    IntermediaryResult(newDocumentURL, content, id)
+                    IntermediaryResult(newDocumentURL, ResourceType.CONTAINER, content, id)
                 }
             }
         } else {
             throw RuntimeException("A target URL for this request could not be resolved!")
         }
+    }
+
+    private suspend fun handleGetMutateObjectType(runtimeEnv: DataFetchingEnvironment): IntermediaryResult? {
+        val classUri = getTypeClassURI(runtimeEnv.fieldType)
+        val targetUrl = runtimeEnv.getLocalContext<SolidLDPContext>().resolver.resolve(
+            classUri.uri.toString(),
+            object : TargetResolverContext {})
+        return if (targetUrl != null) {
+            val resourceType = ldpClient.fetchResourceType(targetUrl)
+            getInstanceById(ldpClient, targetUrl, runtimeEnv.getArgument("id"), classUri, resourceType)
+        } else {
+            throw RuntimeException("A target URL for this request could not be resolved!")
+        }
+    }
+
+    private suspend fun handleDeleteMutation(runtimeEnv: DataFetchingEnvironment): IntermediaryResult? {
+        val source = runtimeEnv.getSource<IntermediaryResult>()
+        when (source.resourceType) {
+            ResourceType.DOCUMENT -> ldpClient.deleteDocument(source.requestUrl)
+            ResourceType.CONTAINER -> ldpClient.patchDocument(source.requestUrl, deletes = source.documentGraph)
+        }
+        return source
     }
 
     private fun generateTriplesForInput(

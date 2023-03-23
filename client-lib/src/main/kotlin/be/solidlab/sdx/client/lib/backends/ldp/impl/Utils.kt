@@ -1,15 +1,44 @@
 package be.solidlab.sdx.client.lib.backends.ldp.impl
 
+import be.solidlab.sdx.client.commons.ldp.LdpClient
+import be.solidlab.sdx.client.commons.ldp.ResourceType
 import graphql.Scalars
 import graphql.schema.*
 import org.apache.jena.graph.Graph
 import org.apache.jena.graph.Node
 import org.apache.jena.graph.NodeFactory
 import org.apache.jena.graph.impl.LiteralLabel
+import org.apache.jena.vocabulary.RDF
 import java.net.MalformedURLException
 import java.net.URL
 
-internal data class IntermediaryResult(val requestUrl: URL, val documentGraph: Graph, val subject: Node)
+internal data class IntermediaryResult(
+    val requestUrl: URL,
+    val resourceType: ResourceType,
+    val documentGraph: Graph,
+    val subject: Node
+)
+
+internal suspend fun getInstanceById(
+    ldpClient: LdpClient,
+    targetUrl: URL,
+    id: String,
+    classUri: Node,
+    resourceType: ResourceType
+): IntermediaryResult? {
+    val documentUrl =
+        if (resourceType == ResourceType.DOCUMENT) targetUrl else getAbsoluteURL(id, targetUrl)
+    if (!documentUrl.toString().startsWith(targetUrl.toString())) {
+        throw IllegalArgumentException("Entity with id $documentUrl is not in range of target URL $targetUrl")
+    }
+    val documentGraph = ldpClient.downloadDocumentGraph(documentUrl)
+    // Specific instance entrypoint
+    return documentGraph.find(
+        NodeFactory.createURI(id),
+        RDF.type.asNode(),
+        classUri
+    ).mapWith { IntermediaryResult(targetUrl, resourceType, documentGraph, it.subject) }.asSequence().firstOrNull()
+}
 
 internal fun getPropertyPath(runtimeEnv: DataFetchingEnvironment): Node {
     return NodeFactory.createURI(

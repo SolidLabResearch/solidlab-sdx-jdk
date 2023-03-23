@@ -13,7 +13,7 @@ type Address @is(class : "http://schema.org/PostalAddress") {
   streetLine: String! @property(iri : "<http://schema.org/streetAddress>")
 }
 
-type AddressMutation {
+type AddressMutation @is(class : "http://schema.org/PostalAddress") {
   "Delete this instance of Address"
   delete: Address!
   "Perform an update mutation based on the given input type."
@@ -30,7 +30,7 @@ type Contact @is(class : "http://schema.org/Person") {
   worksFor: [Organization!]! @property(iri : "<http://schema.org/worksFor>")
 }
 
-type ContactMutation {
+type ContactMutation @is(class : "http://schema.org/Person") {
   "Add an instance of Organization to this Contact"
   addOrganization(input: CreateOrganizationInput!): Contact!
   "Clear the Address from this Contact"
@@ -75,7 +75,7 @@ type Organization @is(class : "http://schema.org/Organization") {
   name: String! @property(iri : "<http://schema.org/name>")
 }
 
-type OrganizationMutation {
+type OrganizationMutation @is(class : "http://schema.org/Organization") {
   "Clear the Address from this Organization"
   clearAddress: Organization!
   "Delete this instance of Organization"

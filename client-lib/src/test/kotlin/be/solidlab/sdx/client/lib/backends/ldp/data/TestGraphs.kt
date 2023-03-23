@@ -11,6 +11,11 @@ import java.io.StringWriter
 import kotlin.reflect.full.declaredMemberProperties
 import kotlin.reflect.full.findAnnotations
 
+val addresses = (1..10).map {
+    Address("https://example.org/addresses/example$it", "Some street 99$it", "Some City$it", "9999$it", "Some Country")
+}
+
+
 val contact = Contact(
     "https://example.org/persons/jdoe",
     "John",
@@ -45,6 +50,7 @@ val contacts = (1..10).map {
 
 
 val testGraphs = mapOf(
+    "/addresses/addresses.ttl" to addresses,
     "/contacts/jdoe.ttl" to contact,
     "/contacts/contacts.ttl" to contacts
 )
@@ -132,6 +138,7 @@ fun convertToRDF(instance: Any): Graph {
     }
     return graph
 }
+
 fun Graph.encodeAsTurtle(): String {
     return StringWriter().use { writer ->
         RDFDataMgr.write(writer, this, Lang.TURTLE)
@@ -140,5 +147,5 @@ fun Graph.encodeAsTurtle(): String {
 }
 
 fun main() {
-    println(convertToRDF( contact).encodeAsTurtle())
+    println(convertToRDF(contact).encodeAsTurtle())
 }

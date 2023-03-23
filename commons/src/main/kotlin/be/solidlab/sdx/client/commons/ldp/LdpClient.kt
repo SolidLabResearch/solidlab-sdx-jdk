@@ -1,5 +1,6 @@
 package be.solidlab.sdx.client.commons.ldp
 
+import be.solidlab.sdx.client.commons.linkeddata.GraphIO
 import io.vertx.core.Vertx
 import io.vertx.core.buffer.Buffer
 import io.vertx.ext.web.client.WebClient
@@ -60,18 +61,28 @@ class LdpClient(vertx: Vertx) {
         }
     }
 
-    suspend fun patchDocument(url: URL, inserts: Graph) {
-        val n3Inserts = StringWriter().use { writer ->
-            RDFDataMgr.write(writer, inserts, Lang.N3)
-            writer.toString()
+    suspend fun patchDocument(url: URL, inserts: Graph? = null, deletes: Graph? = null) {
+        val n3Inserts = inserts?.let { insertGraph ->
+            "solid:inserts { ${GraphIO.encodeAsString(insertGraph, Lang.N3)} }"
         }
+        val n3Deletes = deletes?.let { deleteGraph ->
+            "solid:deletes { ${GraphIO.encodeAsString(deleteGraph, Lang.N3)} }"
+        }
+        val patchContent = listOfNotNull(n3Inserts, n3Deletes).joinToString(separator = ";", postfix = ".")
         val requestBody =
-            "@prefix solid: <http://www.w3.org/ns/solid/terms#>. _:rename a solid:InsertDeletePatch; solid:inserts { $n3Inserts }."
+            "@prefix solid: <http://www.w3.org/ns/solid/terms#>. _:rename a solid:InsertDeletePatch; $patchContent"
 
         val resp = webClient.patchAbs(url.toString()).putHeader(HttpHeaders.CONTENT_TYPE, "text/n3")
             .sendBuffer(Buffer.buffer(requestBody)).toCompletionStage().await()
         if (resp.statusCode() !in 200..399) {
             throw RuntimeException("The patch was not completed successfully (status: ${resp.statusCode()}, message: ${resp.bodyAsString()})")
+        }
+    }
+
+    suspend fun deleteDocument(url: URL) {
+        val resp = webClient.deleteAbs(url.toString()).send().toCompletionStage().await()
+        if (resp.statusCode() !in 200..399) {
+            throw RuntimeException("The delete was not completed successfully (status: ${resp.statusCode()}, message: ${resp.bodyAsString()})")
         }
     }
 
