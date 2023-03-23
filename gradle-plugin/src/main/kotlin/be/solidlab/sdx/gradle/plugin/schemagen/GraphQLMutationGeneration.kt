@@ -10,6 +10,7 @@ import org.apache.jena.shacl.engine.constraint.MinCount
 import org.apache.jena.shacl.parser.NodeShape
 import org.apache.jena.shacl.parser.PropertyShape
 import org.apache.jena.shacl.vocabulary.SHACL
+import org.gradle.configurationcache.extensions.capitalized
 
 internal fun generateMutations(context: ParseContext, typesMap: Map<String, GraphQLObjectType>): GraphQLObjectType {
     return GraphQLObjectType.newObject()
@@ -69,6 +70,7 @@ internal fun generateMutationType(
                         val collection =
                             GraphQLTypeUtil.isList(GraphQLTypeUtil.unwrapNonNull(fieldDef.type))
                         val refName = (fieldDef.type.rawType() as GraphQLTypeReference).name
+                        val propertyName = fieldDef.name.capitalized()
                         val addPrefix = if (collection) "add" else "set"
                         val addDescription =
                             if (collection) "Add an instance of $refName to this $shapeName" else "Set the $refName for this $shapeName"
@@ -77,7 +79,7 @@ internal fun generateMutationType(
                             if (collection) "Remove the specified instance of $refName from this $shapeName" else "Clear the $refName from this $shapeName"
                         listOf(
                             GraphQLFieldDefinition.newFieldDefinition()
-                                .name("$addPrefix$refName")
+                                .name("$addPrefix$propertyName")
                                 .description(addDescription)
                                 .argument(
                                     GraphQLArgument.newArgument().name("input")
@@ -86,7 +88,7 @@ internal fun generateMutationType(
                                 .type(GraphQLNonNull.nonNull(GraphQLTypeReference.typeRef(shapeName)))
                                 .build(),
                             GraphQLFieldDefinition.newFieldDefinition()
-                                .name("$removePrefix$refName")
+                                .name("$removePrefix$propertyName")
                                 .description(removeDescription)
                                 .arguments(
                                     if (collection) listOf(
@@ -97,7 +99,7 @@ internal fun generateMutationType(
                                 .type(GraphQLNonNull.nonNull(GraphQLTypeReference.typeRef(shapeName)))
                                 .build(),
                             GraphQLFieldDefinition.newFieldDefinition()
-                                .name("link$refName")
+                                .name("link$propertyName")
                                 .description("Create a relation of type $refName between the instance of $shapeName and the given ID")
                                 .argument(
                                     GraphQLArgument.newArgument().name("id")
@@ -106,7 +108,7 @@ internal fun generateMutationType(
                                 .type(GraphQLNonNull.nonNull(GraphQLTypeReference.typeRef(shapeName)))
                                 .build(),
                             GraphQLFieldDefinition.newFieldDefinition()
-                                .name("unlink$refName")
+                                .name("unlink$propertyName")
                                 .description("Remove the relation of type $refName between the instance of $shapeName and the given ID (if it exists)")
                                 .argument(
                                     GraphQLArgument.newArgument().name("id")
