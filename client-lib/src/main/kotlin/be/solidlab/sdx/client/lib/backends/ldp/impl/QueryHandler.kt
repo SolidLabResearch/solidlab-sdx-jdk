@@ -18,9 +18,7 @@ import java.util.concurrent.CompletionStage
 
 internal class QueryHandler(private val ldpClient: LdpClient) {
     fun handleIdProperty(runtimeEnv: DataFetchingEnvironment): String {
-        val source = runtimeEnv.getSource<IntermediaryResult>()
-        val idVal = runtimeEnv.getSource<IntermediaryResult>().subject.toString(false)
-        return if (idVal.isEmpty() || idVal.startsWith("#")) source.requestUrl.toString().plus(idVal) else idVal
+        return runtimeEnv.getSource<IntermediaryResult>().getFQSubject()
     }
 
     fun handleScalarProperty(runtimeEnv: DataFetchingEnvironment): Any? {

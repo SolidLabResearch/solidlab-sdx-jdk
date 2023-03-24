@@ -1,0 +1,7 @@
+services:
+  css:
+    image: solidproject/community-server:latest
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./demo-app/pod:/data

@@ -11,7 +11,7 @@ import java.net.URL
 
 data class SolidClient<C : SolidTargetBackendContext>(
     val backend: SolidTargetBackend<C>
-) {
+) : AutoCloseable {
 
     private val apolloClient = ApolloClient.Builder()
         .networkTransport(backend)
@@ -26,7 +26,15 @@ data class SolidClient<C : SolidTargetBackendContext>(
     }
 
     fun <D : Mutation.Data> mutation(mutation: Mutation<D>, context: C? = null): ApolloCall<D> {
-        TODO()
+        val q = apolloClient.mutation(mutation)
+        if (context != null) {
+            q.addExecutionContext(SolidExecutionContext(context))
+        }
+        return q
+    }
+
+    override fun close() {
+        backend.dispose()
     }
 }
 

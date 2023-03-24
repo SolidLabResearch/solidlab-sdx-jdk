@@ -17,7 +17,12 @@ internal data class IntermediaryResult(
     val resourceType: ResourceType,
     val documentGraph: Graph,
     val subject: Node
-)
+) {
+    fun getFQSubject(): String {
+        val idVal = this.subject.toString(false)
+        return if (idVal.isEmpty() || idVal.startsWith("#")) this.requestUrl.toString().plus(idVal) else idVal
+    }
+}
 
 internal suspend fun getInstanceById(
     ldpClient: LdpClient,

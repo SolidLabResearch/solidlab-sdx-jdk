@@ -33,7 +33,7 @@ class LdpClient(vertx: Vertx) {
         val resp = webClient.getAbs(url.toString()).putHeader(HttpHeaders.ACCEPT, CONTENT_TYPE_TURTLE).send()
             .toCompletionStage().await()
         val document = resp.bodyAsString()
-        return RDFParserBuilder.create().source(StringReader(document)).lang(Lang.TURTLE).toGraph()
+        return GraphIO.from(document, Lang.TURTLE, url.toString())
     }
 
     suspend fun downloadContainerAsGraph(url: URL): Graph {

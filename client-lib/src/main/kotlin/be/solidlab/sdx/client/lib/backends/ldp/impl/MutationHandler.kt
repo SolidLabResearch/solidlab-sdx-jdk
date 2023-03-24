@@ -14,6 +14,7 @@ import org.apache.jena.graph.Graph
 import org.apache.jena.graph.Node
 import org.apache.jena.graph.NodeFactory
 import org.apache.jena.sparql.graph.GraphFactory
+import org.apache.jena.vocabulary.RDF
 import java.net.URL
 import java.util.*
 import java.util.concurrent.CompletionStage
@@ -47,24 +48,26 @@ class MutationHandler(private val ldpClient: LdpClient) {
             object : TargetResolverContext {})
         val input: Map<String, Any?> = runtimeEnv.getArgument("input")
         return if (targetUrl != null) {
-            val id = getNewInstanceID(input)
+            val resourceType = ldpClient.fetchResourceType(targetUrl)
+            val id = getNewInstanceID(input, resourceType)
             val content = generateTriplesForInput(
                 id,
                 input,
-                GraphQLTypeUtil.unwrapNonNull(runtimeEnv.fieldDefinition.getArgument("input").type) as GraphQLInputObjectType
+                GraphQLTypeUtil.unwrapNonNull(runtimeEnv.fieldDefinition.getArgument("input").type) as GraphQLInputObjectType,
+                classUri
             )
-            when (ldpClient.fetchResourceType(targetUrl)) {
+            when (resourceType) {
                 ResourceType.DOCUMENT -> {
                     // Append triples to doc using patch
                     ldpClient.patchDocument(targetUrl, content)
-                    IntermediaryResult(targetUrl, ResourceType.DOCUMENT, content, id)
+                    IntermediaryResult(targetUrl, resourceType, content, id)
                 }
 
                 ResourceType.CONTAINER -> {
                     // Post triples as new document in the container
                     val newDocumentURL = getNewDocumentURL(targetUrl, input)
                     ldpClient.putDocument(newDocumentURL, content)
-                    IntermediaryResult(newDocumentURL, ResourceType.CONTAINER, content, id)
+                    IntermediaryResult(newDocumentURL, resourceType, content, id)
                 }
             }
         } else {
@@ -88,8 +91,8 @@ class MutationHandler(private val ldpClient: LdpClient) {
     private suspend fun handleDeleteMutation(runtimeEnv: DataFetchingEnvironment): IntermediaryResult? {
         val source = runtimeEnv.getSource<IntermediaryResult>()
         when (source.resourceType) {
-            ResourceType.DOCUMENT -> ldpClient.deleteDocument(source.requestUrl)
-            ResourceType.CONTAINER -> ldpClient.patchDocument(source.requestUrl, deletes = source.documentGraph)
+            ResourceType.CONTAINER -> ldpClient.deleteDocument(URL(source.getFQSubject()))
+            ResourceType.DOCUMENT -> ldpClient.patchDocument(source.requestUrl, deletes = source.documentGraph)
         }
         return source
     }
@@ -97,9 +100,11 @@ class MutationHandler(private val ldpClient: LdpClient) {
     private fun generateTriplesForInput(
         subject: Node,
         input: Map<String, Any?>,
-        inputDefinition: GraphQLInputObjectType
+        inputDefinition: GraphQLInputObjectType,
+        classUri: Node
     ): Graph {
         val resultGraph = GraphFactory.createDefaultGraph()
+        resultGraph.add(subject, RDF.type.asNode(), classUri)
         inputDefinition.fields.filter { it.name != "slug" && it.name != "id" }.forEach { field ->
             input[field.name]?.let { literalVal ->
                 resultGraph.add(
@@ -114,8 +119,13 @@ class MutationHandler(private val ldpClient: LdpClient) {
         return resultGraph
     }
 
-    private fun getNewInstanceID(input: Map<String, Any?>): Node {
-        return NodeFactory.createURI(input[ID_FIELD]?.toString() ?: "#${input[SLUG_FIELD] ?: UUID.randomUUID()}")
+    private fun getNewInstanceID(input: Map<String, Any?>, resourceType: ResourceType): Node {
+        return when (resourceType) {
+            ResourceType.CONTAINER -> NodeFactory.createURI("")
+            ResourceType.DOCUMENT -> NodeFactory.createURI(
+                input[ID_FIELD]?.toString() ?: "#${input[SLUG_FIELD] ?: UUID.randomUUID()}"
+            )
+        }
     }
 
     private fun getNewDocumentURL(targetUrl: URL, input: Map<String, Any?>): URL {

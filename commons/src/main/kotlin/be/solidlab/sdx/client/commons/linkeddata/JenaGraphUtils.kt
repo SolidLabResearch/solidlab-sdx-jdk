@@ -28,8 +28,12 @@ object GraphIO {
         return result
     }
 
-    fun from(stringRepresentation: String, lang: Lang = Lang.TURTLE): Graph {
-        return RDFParserBuilder.create().source(StringReader(stringRepresentation)).lang(lang).toGraph()
+    fun from(stringRepresentation: String, lang: Lang = Lang.TURTLE, base: String? = null): Graph {
+        val builder = RDFParserBuilder.create().source(StringReader(stringRepresentation)).lang(lang)
+        if (base != null) {
+            builder.base(base)
+        }
+        return builder.toGraph()
     }
 
     fun encodeAsString(graph: Graph, lang: Lang = Lang.TURTLE): String {

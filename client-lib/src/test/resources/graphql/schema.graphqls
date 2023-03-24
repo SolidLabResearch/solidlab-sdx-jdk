@@ -32,7 +32,7 @@ type Contact @is(class : "http://schema.org/Person") {
 
 type ContactMutation @is(class : "http://schema.org/Person") {
   "Add an instance of Organization to this Contact"
-  addOrganization(input: CreateOrganizationInput!): Contact!
+  addWorksFor(input: CreateOrganizationInput!): Contact!
   "Clear the Address from this Contact"
   clearAddress: Contact!
   "Delete this instance of Contact"
@@ -40,15 +40,15 @@ type ContactMutation @is(class : "http://schema.org/Person") {
   "Create a relation of type Address between the instance of Contact and the given ID"
   linkAddress(id: ID!): Contact!
   "Create a relation of type Organization between the instance of Contact and the given ID"
-  linkOrganization(id: ID!): Contact!
+  linkWorksFor(id: ID!): Contact!
   "Remove the specified instance of Organization from this Contact"
-  removeOrganization(id: ID!): Contact!
+  removeWorksFor(id: ID!): Contact!
   "Set the Address for this Contact"
   setAddress(input: CreateAddressInput!): Contact!
   "Remove the relation of type Address between the instance of Contact and the given ID (if it exists)"
   unlinkAddress(id: ID!): Contact!
   "Remove the relation of type Organization between the instance of Contact and the given ID (if it exists)"
-  unlinkOrganization(id: ID!): Contact!
+  unlinkWorksFor(id: ID!): Contact!
   "Perform an update mutation based on the given input type."
   update(input: UpdateContactInput!): Contact!
 }

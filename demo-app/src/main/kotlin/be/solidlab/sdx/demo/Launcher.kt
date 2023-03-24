@@ -4,16 +4,18 @@ import be.solid.sdx.demo.queries.GetContactBasicQuery
 import be.solidlab.sdx.client.lib.SolidClient
 import be.solidlab.sdx.client.lib.backends.ldp.SolidLDPBackend
 import be.solidlab.sdx.client.lib.backends.ldp.SolidLDPContext
+import be.solidlab.sdx.client.lib.backends.ldp.StaticTargetResolver
 import kotlinx.coroutines.runBlocking
 import kotlin.system.exitProcess
 
 fun main(): Unit = runBlocking {
-    val client = SolidClient(backend = SolidLDPBackend())
+    SolidClient(backend = SolidLDPBackend(schemaFile = "demo-app/src/main/graphql/schema.graphqls")).use { client ->
+        // Execute query
+        val context =
+            SolidLDPContext(resolver = StaticTargetResolver("http://localhost:3000/contacts/"))
+        val response =
+            client.query(GetContactBasicQuery("http://localhost:3000/contacts/jdoe.ttl#jdoe"), context).execute()
 
-    // Execute query
-    val context = SolidLDPContext(target = "https://cloud.ilabt.imec.be/index.php/s/Sb9oJ5YKX4DXaMo/download/jdoe.ttl")
-    val response = client.query(GetContactBasicQuery("https://example.org/persons/jdoe"), context).execute()
-
-    println(response.dataAssertNoErrors.contact)
-    exitProcess(0)
+        println(response.dataAssertNoErrors.contact)
+    }
 }
