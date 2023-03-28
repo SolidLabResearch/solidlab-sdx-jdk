@@ -7,7 +7,7 @@ plugins {
 val vertxVersion = "4.4.0"
 
 dependencies {
-    implementation(project(":commons"))
+    api(project(":commons"))
     implementation("org.apache.jena:jena-shacl:4.7.0")
     implementation("com.graphql-java:graphql-java:20.0")
     implementation(platform("io.vertx:vertx-stack-depchain:$vertxVersion"))
@@ -16,6 +16,7 @@ dependencies {
     implementation("io.vertx:vertx-auth-oauth2")
     implementation("com.nimbusds:nimbus-jose-jwt:9.31")
     implementation("io.vertx:vertx-lang-kotlin")
+    implementation("ch.qos.logback:logback-classic:1.4.6")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-jdk8:1.6.4")
     implementation("org.jetbrains.kotlin:kotlin-reflect:1.7.20")
     api("com.apollographql.apollo3:apollo-runtime:3.7.4")

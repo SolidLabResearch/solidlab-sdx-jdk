@@ -1,5 +1,6 @@
 package be.solidlab.sdx.client.lib.backends.ldp
 
+import be.solidlab.sdx.client.commons.auth.SolidClientCredentials
 import be.solidlab.sdx.client.commons.graphql.isScalar
 import be.solidlab.sdx.client.commons.graphql.rawType
 import be.solidlab.sdx.client.commons.ldp.LdpClient
@@ -24,24 +25,17 @@ import java.util.*
 
 const val MUTATION_OPERATION_NAME = "MUTATION"
 
-data class SolidLDPContext(val resolver: TargetResolver) : SolidTargetBackendContext
+data class SolidLDPContext(val resolver: TargetResolver) :
+    SolidTargetBackendContext
 
 data class SolidLDPBackend(
-    private val podUrl: String? = null,
-    private val clientID: String? = null,
-    private val secret: String? = null,
+    private val clientCredentials: SolidClientCredentials? = null,
     private val schemaFile: String = "src/main/graphql/schema.graphqls"
 ) :
     SolidTargetBackend<SolidLDPContext> {
 
-    init {
-        // Validation of constructor arguments
-        require(podUrl != null || clientID == null) { "When using client authentication, a podUrl must be provided!" }
-        require(secret != null || clientID == null) { "When using client authentication, a client secret must be provided!" }
-    }
-
     private val vertx = Vertx.vertx()
-    private val ldpClient = LdpClient(vertx)
+    private val ldpClient = LdpClient(vertx, clientCredentials)
     private val queryHandler = QueryHandler(ldpClient)
     private val mutationHandler = MutationHandler(ldpClient)
     private val graphql = buildGraphQL()

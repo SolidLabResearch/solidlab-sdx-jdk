@@ -1,8 +1,11 @@
 package be.solidlab.sdx.client.commons.ldp
 
+import be.solidlab.sdx.client.commons.auth.AuthenticatedWebClient
+import be.solidlab.sdx.client.commons.auth.SolidClientCredentials
 import be.solidlab.sdx.client.commons.linkeddata.GraphIO
 import io.vertx.core.Vertx
 import io.vertx.core.buffer.Buffer
+import io.vertx.ext.auth.oauth2.OAuth2Options
 import io.vertx.ext.web.client.WebClient
 import kotlinx.coroutines.flow.asFlow
 import kotlinx.coroutines.flow.map
@@ -15,7 +18,6 @@ import org.apache.jena.riot.Lang
 import org.apache.jena.riot.RDFDataMgr
 import org.apache.jena.riot.RDFParserBuilder
 import org.apache.jena.sparql.graph.GraphFactory
-import java.io.StringReader
 import java.io.StringWriter
 import java.net.URL
 
@@ -25,9 +27,15 @@ private const val LINK_HEADER = "Link"
 private const val IS_CONTAINER_LINK_HEADER_VAL = "<http://www.w3.org/ns/ldp#Container>; rel=\"type\""
 private const val IS_RESOURCE_LiNK_HEADER_VAL = "<http://www.w3.org/ns/ldp#Resource>; rel=\"type\""
 
-class LdpClient(vertx: Vertx) {
+class LdpClient(vertx: Vertx, clientCredentials: SolidClientCredentials? = null) {
 
-    val webClient: WebClient = WebClient.create(vertx)
+    val webClient: WebClient = clientCredentials?.let {
+        AuthenticatedWebClient.create(
+            vertx,
+            OAuth2Options().setSite(clientCredentials.identityServerUrl).setClientId(clientCredentials.clientId)
+                .setClientSecret(clientCredentials.clientSecret)
+        )
+    } ?: WebClient.create(vertx)
 
     suspend fun downloadDocumentGraph(url: URL): Graph {
         val resp = webClient.getAbs(url.toString()).putHeader(HttpHeaders.ACCEPT, CONTENT_TYPE_TURTLE).send()
