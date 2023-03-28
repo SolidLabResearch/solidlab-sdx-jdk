@@ -1,8 +1,9 @@
 package be.solidlab.sdx.client.lib.backends.ldp
 
+import be.solidlab.sdx.client.commons.ldp.LdpClient
 import java.net.URL
 
-interface TargetResolverContext
+data class TargetResolverContext(val ldpClient: LdpClient)
 
 interface TargetResolver {
 

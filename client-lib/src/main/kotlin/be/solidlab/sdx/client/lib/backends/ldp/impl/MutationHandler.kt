@@ -44,8 +44,8 @@ class MutationHandler(private val ldpClient: LdpClient) {
     private suspend fun handleCreateMutation(runtimeEnv: DataFetchingEnvironment): IntermediaryResult {
         val classUri = getTypeClassURI(runtimeEnv.fieldType)
         val targetUrl = runtimeEnv.getLocalContext<SolidLDPContext>().resolver.resolve(
-            classUri.uri.toString(),
-            object : TargetResolverContext {})
+            classUri.uri.toString(), TargetResolverContext(ldpClient)
+        )
         val input: Map<String, Any?> = runtimeEnv.getArgument("input")
         return if (targetUrl != null) {
             val resourceType = ldpClient.fetchResourceType(targetUrl)
@@ -79,7 +79,8 @@ class MutationHandler(private val ldpClient: LdpClient) {
         val classUri = getTypeClassURI(runtimeEnv.fieldType)
         val targetUrl = runtimeEnv.getLocalContext<SolidLDPContext>().resolver.resolve(
             classUri.uri.toString(),
-            object : TargetResolverContext {})
+            TargetResolverContext(ldpClient)
+        )
         return if (targetUrl != null) {
             val resourceType = ldpClient.fetchResourceType(targetUrl)
             getInstanceById(ldpClient, targetUrl, runtimeEnv.getArgument("id"), classUri, resourceType)

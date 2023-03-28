@@ -27,7 +27,7 @@ private const val IS_RESOURCE_LiNK_HEADER_VAL = "<http://www.w3.org/ns/ldp#Resou
 
 class LdpClient(vertx: Vertx) {
 
-    private val webClient = WebClient.create(vertx)
+    val webClient: WebClient = WebClient.create(vertx)
 
     suspend fun downloadDocumentGraph(url: URL): Graph {
         val resp = webClient.getAbs(url.toString()).putHeader(HttpHeaders.ACCEPT, CONTENT_TYPE_TURTLE).send()

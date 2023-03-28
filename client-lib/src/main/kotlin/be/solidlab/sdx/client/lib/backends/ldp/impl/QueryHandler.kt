@@ -45,8 +45,8 @@ internal class QueryHandler(private val ldpClient: LdpClient) {
         CoroutineScope(Dispatchers.IO).future {
             val classUri = getTypeClassURI(runtimeEnv.fieldType)
             val targetUrl = runtimeEnv.getLocalContext<SolidLDPContext>().resolver.resolve(
-                classUri.uri.toString(),
-                object : TargetResolverContext {})
+                classUri.uri.toString(), TargetResolverContext(ldpClient)
+            )
             if (targetUrl != null) {
                 val resourceType = ldpClient.fetchResourceType(targetUrl)
                 if (runtimeEnv.containsArgument("id")) {

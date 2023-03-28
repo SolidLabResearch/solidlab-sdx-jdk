@@ -17,7 +17,6 @@ fun main(): Unit = runBlocking {
             SolidLDPContext(resolver = StaticTargetResolver("http://localhost:3000/contacts/contacts.ttl"))
 
         // Create contact
-        CreateContactBasicMutation
         val createResp =
             client.mutation(
                 CreateContactBasicMutation(Optional.present("jdoe"), "John", "Doe", "john.doe@gmail.com"),
