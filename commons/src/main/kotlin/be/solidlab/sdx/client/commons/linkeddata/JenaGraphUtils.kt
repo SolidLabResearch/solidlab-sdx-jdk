@@ -21,6 +21,11 @@ fun Graph.add(triples: ExtendedIterator<Triple>): Graph {
     return this
 }
 
+fun Graph.remove(other: Graph): Graph {
+    other.find().asSequence().forEach { this.remove(it.subject, it.predicate, it.`object`) }
+    return this
+}
+
 object GraphIO {
     fun from(file: File): Graph {
         val result = GraphFactory.createDefaultGraph()

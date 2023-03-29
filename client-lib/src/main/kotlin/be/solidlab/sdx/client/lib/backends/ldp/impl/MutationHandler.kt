@@ -1,11 +1,15 @@
 package be.solidlab.sdx.client.lib.backends.ldp.impl
 
+import be.solidlab.sdx.client.commons.graphql.unwrapNonNull
 import be.solidlab.sdx.client.commons.ldp.LdpClient
 import be.solidlab.sdx.client.commons.ldp.ResourceType
+import be.solidlab.sdx.client.commons.linkeddata.add
+import be.solidlab.sdx.client.commons.linkeddata.remove
 import be.solidlab.sdx.client.lib.backends.ldp.SolidLDPContext
 import be.solidlab.sdx.client.lib.backends.ldp.TargetResolverContext
 import graphql.schema.DataFetchingEnvironment
 import graphql.schema.GraphQLInputObjectType
+import graphql.schema.GraphQLObjectType
 import graphql.schema.GraphQLTypeUtil
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -29,7 +33,7 @@ class MutationHandler(private val ldpClient: LdpClient) {
             when {
                 fieldName.startsWith("create") -> handleCreateMutation(runtimeEnv)
                 fieldName.startsWith("mutate") -> handleGetMutateObjectType(runtimeEnv)
-                fieldName == "update" -> TODO()
+                fieldName == "update" -> handleUpdateMutation(runtimeEnv)
                 fieldName == "delete" -> handleDeleteMutation(runtimeEnv)
                 fieldName.startsWith("set") -> TODO()
                 fieldName.startsWith("clear") -> TODO()
@@ -37,7 +41,7 @@ class MutationHandler(private val ldpClient: LdpClient) {
                 fieldName.startsWith("remove") -> TODO()
                 fieldName.startsWith("link") -> TODO()
                 fieldName.startsWith("unlink") -> TODO()
-                else -> TODO()
+                else -> throw UnsupportedOperationException()
             }
         }
 
@@ -98,6 +102,19 @@ class MutationHandler(private val ldpClient: LdpClient) {
         return source
     }
 
+    private suspend fun handleUpdateMutation(runtimeEnv: DataFetchingEnvironment): Any {
+        val source = runtimeEnv.getSource<IntermediaryResult>()
+        val inputType = runtimeEnv.fieldDefinition.getArgument("input").type.unwrapNonNull() as GraphQLInputObjectType
+        // Get object type associated with input type
+        val objType =
+            runtimeEnv.graphQLSchema.getObjectType(inputType.name.removePrefix("Update").removeSuffix("Input"))
+        val (insertTriples, deleteTriples) = generateTriplesForUpdate(source, runtimeEnv.getArgument("input"), objType)
+        ldpClient.patchDocument(source.requestUrl, insertTriples, deleteTriples)
+        val updatedGraph =
+            GraphFactory.createDefaultGraph().add(source.documentGraph).remove(deleteTriples).add(insertTriples)
+        return IntermediaryResult(source.requestUrl, source.resourceType, updatedGraph, source.subject)
+    }
+
     private fun generateTriplesForInput(
         subject: Node,
         input: Map<String, Any?>,
@@ -118,6 +135,35 @@ class MutationHandler(private val ldpClient: LdpClient) {
             }
         }
         return resultGraph
+    }
+
+    private fun generateTriplesForUpdate(
+        sourceContext: IntermediaryResult,
+        input: Map<String, Any?>,
+        objectTypeDefinition: GraphQLObjectType
+    ): Pair<Graph, Graph> {
+        val deleteGraph = GraphFactory.createDefaultGraph()
+        val updateGraph = GraphFactory.createDefaultGraph()
+        input.forEach { (fieldName, value) ->
+            val fieldDef = objectTypeDefinition.getFieldDefinition(fieldName)
+            val propertyUri = NodeFactory.createURI(
+                fieldDef.getAppliedDirective("property").getArgument("iri")
+                    .getValue<String>().removeSurrounding("<", ">")
+            )
+            if (value == null) {
+                // Check if this field may be null
+                require(!GraphQLTypeUtil.isNonNull(fieldDef.type)) { "Update input provided null value for non-nullable field '$fieldName'" }
+                sourceContext.documentGraph.find(sourceContext.subject, propertyUri, Node.ANY).nextOptional()
+                    .ifPresent { deleteGraph.add(it) }
+            } else {
+                sourceContext.documentGraph.find(sourceContext.subject, propertyUri, Node.ANY).nextOptional()
+                    .ifPresent { deleteGraph.add(it) }
+                updateGraph.add(
+                    sourceContext.subject, propertyUri, NodeFactory.createLiteral(value.toString())
+                )
+            }
+        }
+        return Pair(updateGraph, deleteGraph)
     }
 
     private fun getNewInstanceID(input: Map<String, Any?>, resourceType: ResourceType): Node {

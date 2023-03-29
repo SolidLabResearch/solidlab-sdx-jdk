@@ -13,6 +13,7 @@ import org.apache.http.HttpHeaders
 import org.junit.jupiter.api.AfterAll
 import org.junit.jupiter.api.Assertions
 import org.junit.jupiter.api.BeforeAll
+import org.junit.jupiter.api.TestFactory
 import kotlin.test.Test
 
 class SolidLDPBackendMutationTest {
@@ -90,6 +91,27 @@ class SolidLDPBackendMutationTest {
             mutation {
                 mutateAddress(id: "${addresses.random().id}") {
                     delete {
+                        id
+                    }
+                }
+            }
+        """.trimIndent(), defaultLdpContext, mapOf()
+            )
+        )
+
+        println(result)
+    }
+
+    @Test
+    fun testUpdateAddress(): Unit = runBlocking {
+        val result = JsonObject(
+            backend.execute(
+                """
+            mutation {
+                mutateAddress(id: "${addresses.random().id}") {
+                    update(input: {
+                        streetLine: "Some other street 9999"
+                    }) {
                         id
                     }
                 }
