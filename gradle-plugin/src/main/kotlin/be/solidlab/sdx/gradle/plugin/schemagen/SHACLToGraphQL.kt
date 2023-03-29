@@ -45,7 +45,7 @@ object SHACLToGraphQL {
         val graphQLInputTypes = context.allShapes.iteratorAll().asSequence()
             .filter { shape -> context.getImportDefinition(shape.shapeNode).generateMutations }
             .flatMap { shape ->
-                InputTypeConfiguration.values().map { generateInputType(shape as NodeShape, context, it) }
+                InputTypeConfiguration.values().mapNotNull { generateInputType(shape as NodeShape, context, it) }
             }
             .distinctBy { it.name }.toSet()
 

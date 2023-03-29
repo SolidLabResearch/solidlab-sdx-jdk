@@ -46,20 +46,23 @@ internal fun generateMutations(context: ParseContext, typesMap: Map<String, Grap
 internal fun generateMutationType(
     shapeName: String, typesMap: Map<String, GraphQLObjectType>
 ): GraphQLObjectType {
+    val updateType = "${InputTypeConfiguration.UPDATE_TYPE.typePrefix}${shapeName}Input".let { Pair(it, typesMap[it]) }
     return GraphQLObjectType.newObject()
         .name("${shapeName}Mutation")
         .withAppliedDirective(GraphQLAppliedDirective.newDirective(typesMap[shapeName]!!.getAppliedDirective("is")))
         .fields(
-            listOf(
-                GraphQLFieldDefinition.newFieldDefinition()
-                    .name("update")
-                    .description("Perform an update mutation based on the given input type.")
-                    .argument(
-                        GraphQLArgument.newArgument().name("input")
-                            .type(GraphQLNonNull.nonNull(GraphQLTypeReference.typeRef("${InputTypeConfiguration.UPDATE_TYPE.typePrefix}${shapeName}Input")))
-                    )
-                    .type(GraphQLNonNull.nonNull(GraphQLTypeReference.typeRef(shapeName)))
-                    .build(),
+            listOfNotNull(
+                updateType.second?.let {
+                    GraphQLFieldDefinition.newFieldDefinition()
+                        .name("update")
+                        .description("Perform an update mutation based on the given input type.")
+                        .argument(
+                            GraphQLArgument.newArgument().name("input")
+                                .type(GraphQLNonNull.nonNull(GraphQLTypeReference.typeRef(updateType.first)))
+                        )
+                        .type(GraphQLNonNull.nonNull(GraphQLTypeReference.typeRef(shapeName)))
+                        .build()
+                },
                 GraphQLFieldDefinition.newFieldDefinition()
                     .name("delete")
                     .description("Delete this instance of $shapeName")
@@ -126,7 +129,7 @@ internal fun generateInputType(
     shape: NodeShape,
     context: ParseContext,
     inputTypeConfiguration: InputTypeConfiguration
-): GraphQLInputObjectType {
+): GraphQLInputObjectType? {
     val shapeName = parseName(shape.shapeNode, context)
     val fixedFields = if (inputTypeConfiguration == InputTypeConfiguration.CREATE_TYPE) {
         listOf(
@@ -143,7 +146,13 @@ internal fun generateInputType(
     } else {
         emptyList()
     }
-    return GraphQLInputObjectType.newInputObject()
+    val fields = fixedFields.plus(shape.propertyShapes
+        // Only include literal properties
+        .filter { property -> property.shapeGraph.getReference(property.shapeNode, SHACL.datatype) != null }
+        .map { property -> generateInputField(property, inputTypeConfiguration) }
+    )
+
+    return if (fields.isNotEmpty()) GraphQLInputObjectType.newInputObject()
         .name("${inputTypeConfiguration.typePrefix}${shapeName}Input")
         .withAppliedDirective(
             isDirective.toAppliedDirective().transform {
@@ -153,12 +162,8 @@ internal fun generateInputType(
                 )
             }
         )
-        .fields(fixedFields.plus(shape.propertyShapes
-            // Only include literal properties
-            .filter { property -> property.shapeGraph.getReference(property.shapeNode, SHACL.datatype) != null }
-            .map { property -> generateInputField(property, inputTypeConfiguration) }
-        ))
-        .build()
+        .fields(fields)
+        .build() else null
 }
 
 internal fun generateInputField(

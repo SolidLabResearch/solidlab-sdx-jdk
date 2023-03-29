@@ -53,7 +53,7 @@ publishing {
     publications {
         create<MavenPublication>("maven") {
             groupId = "be.solidlab.sdx"
-            artifactId = "solid-sdx-client"
+            artifactId = "client-lib"
             version = "0.1"
 
             from(components["java"])
