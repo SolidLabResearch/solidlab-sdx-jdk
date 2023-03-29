@@ -1,5 +1,6 @@
 package be.solidlab.sdx.client.lib.backends.ldp.impl
 
+import be.solidlab.sdx.client.commons.graphql.isCollection
 import be.solidlab.sdx.client.commons.graphql.unwrapNonNull
 import be.solidlab.sdx.client.commons.ldp.LdpClient
 import be.solidlab.sdx.client.commons.ldp.ResourceType
@@ -153,14 +154,22 @@ class MutationHandler(private val ldpClient: LdpClient) {
             if (value == null) {
                 // Check if this field may be null
                 require(!GraphQLTypeUtil.isNonNull(fieldDef.type)) { "Update input provided null value for non-nullable field '$fieldName'" }
-                sourceContext.documentGraph.find(sourceContext.subject, propertyUri, Node.ANY).nextOptional()
-                    .ifPresent { deleteGraph.add(it) }
+                sourceContext.documentGraph.find(sourceContext.subject, propertyUri, Node.ANY)
+                    .forEach { deleteGraph.add(it) }
             } else {
-                sourceContext.documentGraph.find(sourceContext.subject, propertyUri, Node.ANY).nextOptional()
-                    .ifPresent { deleteGraph.add(it) }
-                updateGraph.add(
-                    sourceContext.subject, propertyUri, NodeFactory.createLiteral(value.toString())
-                )
+                sourceContext.documentGraph.find(sourceContext.subject, propertyUri, Node.ANY)
+                    .forEach { deleteGraph.add(it) }
+                if (fieldDef.type.isCollection()) {
+                    (value as List<*>).forEach { valueEntry ->
+                        updateGraph.add(
+                            sourceContext.subject, propertyUri, NodeFactory.createLiteral(valueEntry.toString())
+                        )
+                    }
+                } else {
+                    updateGraph.add(
+                        sourceContext.subject, propertyUri, NodeFactory.createLiteral(value.toString())
+                    )
+                }
             }
         }
         return Pair(updateGraph, deleteGraph)
