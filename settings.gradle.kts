@@ -1,5 +1,7 @@
 pluginManagement {
     repositories {
+        gradlePluginPortal()
+        google()
         mavenCentral()
         mavenLocal()
     }
@@ -7,5 +9,9 @@ pluginManagement {
 rootProject.name = "solid-sdx"
 include("client-lib")
 include("commons")
-include("demo-app")
 include("gradle-plugin")
+include("demo-app")
+include("benchmark")
+
+
+

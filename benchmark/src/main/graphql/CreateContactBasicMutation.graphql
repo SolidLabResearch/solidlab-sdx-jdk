@@ -1,0 +1,10 @@
+mutation CreateContactBasicMutation($slug: String, $givenName: String!, $familyName: String!, $email: String!) {
+    createContact(input: {
+        slug: $slug
+        givenName: $givenName
+        familyName: $familyName
+        email: [$email]
+    }) {
+        id
+    }
+}

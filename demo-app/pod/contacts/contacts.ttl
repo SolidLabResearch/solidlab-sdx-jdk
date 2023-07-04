@@ -1,0 +1,4 @@
+<#jdoe> a <http://schema.org/Person>;
+    <http://schema.org/email> "[john.doe@gmail.com]";
+    <http://schema.org/familyName> "Doe";
+    <http://schema.org/givenName> "John".
