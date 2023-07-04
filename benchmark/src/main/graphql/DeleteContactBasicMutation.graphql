@@ -1,0 +1,7 @@
+mutation DeleteContactBasicMutation($id: ID!) {
+    mutateContact(id: $id) {
+        delete {
+            id
+        }
+    }
+}

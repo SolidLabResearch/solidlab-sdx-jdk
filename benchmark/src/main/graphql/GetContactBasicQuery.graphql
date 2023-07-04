@@ -1,0 +1,7 @@
+query GetContactBasic($id: String!) {
+    contact(id: $id) {
+        id
+        givenName
+        familyName
+    }
+}

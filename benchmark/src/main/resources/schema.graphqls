@@ -1,0 +1,140 @@
+directive @identifier on FIELD_DEFINITION
+
+directive @is(class: String) on OBJECT | INPUT_OBJECT
+
+directive @property(iri: String) on FIELD_DEFINITION | INPUT_FIELD_DEFINITION
+
+type Address @is(class : "http://schema.org/PostalAddress") {
+  city: String! @property(iri : "<http://schema.org/addressLocality>")
+  country: String! @property(iri : "<http://schema.org/addressCountry>")
+  "Auto-generated property that will be assigned to the `iri` of the Thing that is being queried."
+  id: ID! @identifier
+  postalCode: String! @property(iri : "<http://schema.org/postalCode>")
+  streetLine: String! @property(iri : "<http://schema.org/streetAddress>")
+}
+
+type AddressMutation @is(class : "http://schema.org/PostalAddress") {
+  "Delete this instance of Address"
+  delete: Address!
+}
+
+type Contact @is(class : "http://schema.org/Person") {
+  address: Address @property(iri : "<http://schema.org/address>")
+  email: [String!]! @property(iri : "<http://schema.org/email>")
+  familyName: String! @property(iri : "<http://schema.org/familyName>")
+  givenName: String! @property(iri : "<http://schema.org/givenName>")
+  "Auto-generated property that will be assigned to the `iri` of the Thing that is being queried."
+  id: ID! @identifier
+  worksFor: [Organization!]! @property(iri : "<http://schema.org/worksFor>")
+}
+
+type ContactMutation @is(class : "http://schema.org/Person") {
+  "Add an instance of Organization to this Contact"
+  addWorksFor(input: CreateOrganizationInput!): Contact!
+  "Clear the Address from this Contact"
+  clearAddress: Contact!
+  "Delete this instance of Contact"
+  delete: Contact!
+  "Create a relation of type Address between the instance of Contact and the given ID"
+  linkAddress(id: ID!): Contact!
+  "Create a relation of type Organization between the instance of Contact and the given ID"
+  linkWorksFor(id: ID!): Contact!
+  "Remove the specified instance of Organization from this Contact"
+  removeWorksFor(id: ID!): Contact!
+  "Set the Address for this Contact"
+  setAddress(input: CreateAddressInput!): Contact!
+  "Remove the relation of type Address between the instance of Contact and the given ID (if it exists)"
+  unlinkAddress(id: ID!): Contact!
+  "Remove the relation of type Organization between the instance of Contact and the given ID (if it exists)"
+  unlinkWorksFor(id: ID!): Contact!
+}
+
+type Mutation {
+  "Create a new instance of Address"
+  createAddress(input: CreateAddressInput!): Address!
+  "Create a new instance of Contact"
+  createContact(input: CreateContactInput!): Contact!
+  "Create a new instance of Organization"
+  createOrganization(input: CreateOrganizationInput!): Organization!
+  "Access update/delete mutations for a specific instance of Address"
+  mutateAddress(id: ID!): AddressMutation
+  "Access update/delete mutations for a specific instance of Contact"
+  mutateContact(id: ID!): ContactMutation
+  "Access update/delete mutations for a specific instance of Organization"
+  mutateOrganization(id: ID!): OrganizationMutation
+}
+
+type Organization @is(class : "http://schema.org/Organization") {
+  address: Address @property(iri : "<http://schema.org/address>")
+  "Auto-generated property that will be assigned to the `iri` of the Thing that is being queried."
+  id: ID! @identifier
+  name: String! @property(iri : "<http://schema.org/name>")
+}
+
+type OrganizationMutation @is(class : "http://schema.org/Organization") {
+  "Clear the Address from this Organization"
+  clearAddress: Organization!
+  "Delete this instance of Organization"
+  delete: Organization!
+  "Create a relation of type Address between the instance of Organization and the given ID"
+  linkAddress(id: ID!): Organization!
+  "Set the Address for this Organization"
+  setAddress(input: CreateAddressInput!): Organization!
+  "Remove the relation of type Address between the instance of Organization and the given ID (if it exists)"
+  unlinkAddress(id: ID!): Organization!
+}
+
+type Query {
+  address(id: String): Address
+  addressCollection: [Address]
+  contact(id: String): Contact
+  contactCollection: [Contact]
+  organization(id: String): Organization
+  organizationCollection: [Organization]
+}
+
+input CreateAddressInput @is(class : "http://schema.org/PostalAddress") {
+  city: String! @property(iri : "<http://schema.org/addressLocality>")
+  country: String! @property(iri : "<http://schema.org/addressCountry>")
+  "Optional URI to use as an identifier for the new instance. One of the 'id' or 'slug' fields must be set!"
+  id: ID
+  postalCode: String! @property(iri : "<http://schema.org/postalCode>")
+  "Optional slug that is combined with the context of the request to generate an identifier for the new instance. One of the 'id' or 'slug' fields must be set!"
+  slug: String
+  streetLine: String! @property(iri : "<http://schema.org/streetAddress>")
+}
+
+input CreateContactInput @is(class : "http://schema.org/Person") {
+  email: [String!]! @property(iri : "<http://schema.org/email>")
+  familyName: String! @property(iri : "<http://schema.org/familyName>")
+  givenName: String! @property(iri : "<http://schema.org/givenName>")
+  "Optional URI to use as an identifier for the new instance. One of the 'id' or 'slug' fields must be set!"
+  id: ID
+  "Optional slug that is combined with the context of the request to generate an identifier for the new instance. One of the 'id' or 'slug' fields must be set!"
+  slug: String
+}
+
+input CreateOrganizationInput @is(class : "http://schema.org/Organization") {
+  "Optional URI to use as an identifier for the new instance. One of the 'id' or 'slug' fields must be set!"
+  id: ID
+  name: String! @property(iri : "<http://schema.org/name>")
+  "Optional slug that is combined with the context of the request to generate an identifier for the new instance. One of the 'id' or 'slug' fields must be set!"
+  slug: String
+}
+
+input UpdateAddressInput @is(class : "http://schema.org/PostalAddress") {
+  city: String @property(iri : "<http://schema.org/addressLocality>")
+  country: String @property(iri : "<http://schema.org/addressCountry>")
+  postalCode: String @property(iri : "<http://schema.org/postalCode>")
+  streetLine: String @property(iri : "<http://schema.org/streetAddress>")
+}
+
+input UpdateContactInput @is(class : "http://schema.org/Person") {
+  email: [String!] @property(iri : "<http://schema.org/email>")
+  familyName: String @property(iri : "<http://schema.org/familyName>")
+  givenName: String @property(iri : "<http://schema.org/givenName>")
+}
+
+input UpdateOrganizationInput @is(class : "http://schema.org/Organization") {
+  name: String @property(iri : "<http://schema.org/name>")
+}
