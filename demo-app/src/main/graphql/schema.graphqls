@@ -49,8 +49,6 @@ type ContactMutation @is(class : "http://schema.org/Person") {
   unlinkAddress(id: ID!): Contact!
   "Remove the relation of type Organization between the instance of Contact and the given ID (if it exists)"
   unlinkWorksFor(id: ID!): Contact!
-  "Perform an update mutation based on the given input type."
-  update(input: UpdateContactInput!): Contact!
 }
 
 type Mutation {
@@ -86,8 +84,6 @@ type OrganizationMutation @is(class : "http://schema.org/Organization") {
   setAddress(input: CreateAddressInput!): Organization!
   "Remove the relation of type Address between the instance of Organization and the given ID (if it exists)"
   unlinkAddress(id: ID!): Organization!
-  "Perform an update mutation based on the given input type."
-  update(input: UpdateOrganizationInput!): Organization!
 }
 
 type Query {
