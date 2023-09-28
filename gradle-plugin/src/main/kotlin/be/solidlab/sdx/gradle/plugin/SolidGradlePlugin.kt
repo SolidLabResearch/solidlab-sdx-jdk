@@ -1,6 +1,8 @@
 package be.solidlab.sdx.gradle.plugin
 
-import be.solidlab.sdx.gradle.plugin.schemagen.SHACLToGraphQL
+import be.solidlab.shapeshift.shacl2graphql.SHACLToGraphQL.getSchema
+import be.solidlab.shapeshift.shacl2graphql.ShapeConfig
+import be.solidlab.shapeshift.shacl2graphql.ShiftConfig
 import com.apollographql.apollo3.gradle.internal.DefaultApolloExtension
 import okio.use
 import org.gradle.api.Plugin
@@ -91,11 +93,15 @@ class SolidGradlePlugin : Plugin<Project> {
 
                 }
 
-
+                val shapeConfigs = shapeImports
+                .associateBy { si -> si.importUrl ?: si.catalogId!! }
+                .mapValues {(_, value) ->
+                    ShapeConfig(value.generateMutations, listOf())
+                }
                 println("Generating GraphQL schema from installed Shapes...")
                 val graphqlDir = project.layout.projectDirectory.dir("src/main/graphql")
                 graphqlDir.asFile.mkdirs()
-                val schema = SHACLToGraphQL.getSchema(shapeDir.get().asFile, shapeImports)
+                val schema = getSchema(ShiftConfig(shapeDir.get().asFile, false, shapeConfigs))
                 Files.writeString(graphqlDir.file("schema.graphqls").asFile.toPath(), schema)
             }
         }

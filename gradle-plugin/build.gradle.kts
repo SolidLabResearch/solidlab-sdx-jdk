@@ -12,6 +12,7 @@ dependencies {
     api("com.apollographql.apollo3:com.apollographql.apollo3.gradle.plugin:3.7.4")
     implementation("com.apollographql.apollo3.external:com.apollographql.apollo3.external.gradle.plugin:3.7.4")
     testImplementation(kotlin("test"))
+    implementation("be.solidlab:shapeshift:0.1")
 }
 
 repositories {
