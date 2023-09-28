@@ -26,15 +26,31 @@ object SHACLToGraphQL {
             val shapeSubGraph = GraphFactory.createDefaultGraph()
             RDFDataMgr.read(shapeSubGraph, File(shaclDir, shapeImport.getTargetFileName()).toURI().toString())
             shapeSubGraph.find().filterDrop { it.subject.isURI && shapeImport.exclude.contains(it.subject.uri) }
+                .mapWith {
+                    val prefix = "file://"+shaclDir.absolutePath+"/"+shapeImport.getTargetFileName()
+                    if(shapeImport.catalogId != null && it.subject.isURI && it.subject.uri.toString().startsWith(prefix)){
+                        return@mapWith Triple.create(NodeFactory.createURI(it.subject.toString().replace(prefix,shapeImport.catalogId)),
+                            it.predicate, it.`object`)
+                    }
+                    return@mapWith it
+                }
+                .mapWith {
+                    val prefix = "file://"+shaclDir.absolutePath+"/"+shapeImport.getTargetFileName()
+                    if(shapeImport.catalogId != null && it.`object`.isURI && it.`object`.uri.toString().startsWith(prefix)){
+                        return@mapWith Triple.create(it.subject, it.predicate,
+                            NodeFactory.createURI(it.`object`.toString().replace(prefix,shapeImport.catalogId)))
+                    }
+                    return@mapWith it
+                }
                 .forEach {
                     if (it.predicateMatches(RDF.type.asNode())) {
-                        graph.add(Triple.create(it.subject, importedFrom, NodeFactory.createURI(shapeImport.importUrl)))
+                        graph.add(Triple.create(it.subject, importedFrom, NodeFactory.createURI(shapeImport.importUrl ?: shapeImport.catalogId)))
                     }
                     graph.add(it)
                 }
         }
         val context =
-            ParseContext(Shapes.parse(graph), shapeImports.associateBy { NodeFactory.createURI(it.importUrl) })
+            ParseContext(Shapes.parse(graph), shapeImports.associateBy { NodeFactory.createURI(it.importUrl ?: it.catalogId) })
 
         println("Building GraphQL schema from Graph")
         println("  --> Constructing GraphQL object types")
