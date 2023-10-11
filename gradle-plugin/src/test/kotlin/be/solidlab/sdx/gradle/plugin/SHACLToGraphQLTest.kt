@@ -1,23 +1,27 @@
 package be.solidlab.sdx.gradle.plugin
 
-import be.solidlab.sdx.gradle.plugin.schemagen.SHACLToGraphQL
+
+import be.ugent.solidlab.shapeshift.shacl2graphql.SHACLToGraphQL
+import be.ugent.solidlab.shapeshift.shacl2graphql.ShapeConfig
+import be.ugent.solidlab.shapeshift.shacl2graphql.Context
 import org.junit.jupiter.api.Test
 import java.io.File
 import java.nio.file.Files
+import java.nio.file.Paths
 
 class SHACLToGraphQLTest {
 
     @Test
     fun testBasicShapeConversion() {
-        val result = SHACLToGraphQL.getSchema(
-            File("src/test/resources"),
-            listOf(
-                ShapeImport(
-                    importUrl = "https://example.com/contact-SHACL.ttl",
-                    shapeFileName = "contact-SHACL.ttl"
+        val result = SHACLToGraphQL.getSchema(Context(
+            null, false,
+            mapOf(
+                Pair(
+                    "file://${Paths.get("").toAbsolutePath()}/src/test/resources/contact-SHACL.ttl",
+                    ShapeConfig(false, listOf())
                 )
             )
-        )
+        ))
         val resultFile = File("src/test/resources/schema.graphqls")
         resultFile.delete()
         Files.writeString(resultFile.toPath(), result)

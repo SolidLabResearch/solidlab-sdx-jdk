@@ -1,3 +1,5 @@
+import be.solidlab.sdx.gradle.plugin.ShapeImport
+
 plugins {
     kotlin("jvm")
     id("be.solidlab.sdx-plugin") version "1.0-SNAPSHOT"
@@ -27,10 +29,11 @@ tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile> {
 }
 
 sdx {
-    importShapesFromURL.addAll(
-        "https://cloud.ilabt.imec.be/index.php/s/w3Hr9MENpM7fMBE/download/contact-SHACL.ttl",
-//        "https://data.vlaanderen.be/shacl/adresregister-SHACL.ttl",
-//        "https://data.vlaanderen.be/shacl/persoon-basis-SHACL.ttl"
+    importShapes.add(
+        ShapeImport(
+            importUrl = "https://cloud.ilabt.imec.be/index.php/s/w3Hr9MENpM7fMBE/download/contact-SHACL.ttl",
+            generateMutations = false
+        )
     )
     packageName.set("be.solid.sdx.demo.queries")
 }
