@@ -1,0 +1,25 @@
+name: Build + Test
+
+on:
+  push:
+    branches: [ "master" ]
+  pull_request:
+    branches: [ "master","version/*" ]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up JDK 19
+        uses: actions/setup-java@v3
+        with:
+          java-version: '19'
+          distribution: 'temurin'
+      - name: Build with Gradle
+        run: ./gradlew :sdx-plugin:build
+      - name: Run tests with Gradle
+        run: ./gradlew :sdx-plugin:test

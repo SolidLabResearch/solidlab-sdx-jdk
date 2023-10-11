@@ -2,13 +2,14 @@ import com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar
 
 plugins {
     kotlin("jvm")
-    id("be.solidlab.sdx-plugin") version "1.0-SNAPSHOT"
+//    id("be.solidlab.sdx-plugin") version "1.0.0-SNAPSHOT"
     `maven-publish`
     id("me.champeau.jmh") version "0.6.8"
     id("com.github.johnrengelman.shadow") version "7.1.2"
 }
 
 dependencies {
+    implementation(project(mapOf("path" to ":demo-app")))
     jmh(project(":client-lib"))
     implementation(project(":client-lib"))
     implementation(platform("io.vertx:vertx-stack-depchain:4.4.0"))
@@ -41,14 +42,14 @@ tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile> {
     kotlinOptions.javaParameters = true
 }
 
-sdx {
-    importShapesFromURL.addAll(
-        "https://cloud.ilabt.imec.be/index.php/s/w3Hr9MENpM7fMBE/download/contact-SHACL.ttl",
-//        "https://data.vlaanderen.be/shacl/adresregister-SHACL.ttl",
-//        "https://data.vlaanderen.be/shacl/persoon-basis-SHACL.ttl"
-    )
-    packageName.set("be.solid.sdx.benchmark.queries")
-}
+//sdx {
+//    importShapesFromURL.addAll(
+//        "https://cloud.ilabt.imec.be/index.php/s/w3Hr9MENpM7fMBE/download/contact-SHACL.ttl",
+////        "https://data.vlaanderen.be/shacl/adresregister-SHACL.ttl",
+////        "https://data.vlaanderen.be/shacl/persoon-basis-SHACL.ttl"
+//    )
+//    packageName.set("be.solid.sdx.demo.queries")
+//}
 
 
 
