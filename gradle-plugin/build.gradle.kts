@@ -1,6 +1,9 @@
 plugins {
     kotlin("jvm")
     `java-gradle-plugin`
+    `maven-publish`
+    signing
+    id("org.jetbrains.dokka") version "1.9.0"
 }
 
 dependencies {
@@ -16,14 +19,13 @@ dependencies {
 
 repositories {
     mavenCentral()
-    mavenLocal()
 }
 
 gradlePlugin {
     plugins {
         create("sdxPlugin") {
             id = "be.ugent.solidlab.sdx-plugin"
-            implementationClass = "be.solidlab.sdx.gradle.plugin.SolidGradlePlugin"
+            implementationClass = "be.ugent.solidlab.sdx.gradle.plugin.SolidGradlePlugin"
         }
     }
 }
@@ -42,17 +44,7 @@ tasks.test {
     useJUnitPlatform()
 }
 
-val sourcesJar by tasks.registering(Jar::class) {
-    archiveClassifier.set("sources")
-    from(kotlin.sourceSets.main.get().kotlin)
-}
 
-val javadocJar by tasks.creating(Jar::class) {
-    group = JavaBasePlugin.DOCUMENTATION_GROUP
-    description = "Assembles Javadoc JAR"
-    archiveClassifier.set("javadoc")
-    from(tasks.named("dokkaHtml"))
-}
 
 signing {
     val signingKey = providers
@@ -69,7 +61,7 @@ signing {
     }
 }
 
-group = "be.ugent.solidlab.sdx"
+group = "be.ugent.solidlab"
 
 object Meta {
     const val desc = "Gradle Plugin to allow easy Solid Development"
@@ -80,56 +72,22 @@ object Meta {
 }
 
 publishing {
-    publications {
-        create<MavenPublication>("sdx-plugin") {
-            groupId = project.group.toString()
-            artifactId = project.name
-            version = project.version.toString()
-            from(components["kotlin"])
-            artifact(tasks["sourcesJar"])
-            artifact(tasks["javadocJar"])
 
-            pom {
-                name.set(project.name)
-                description.set(Meta.desc)
-                url.set("https://github.com/${Meta.githubRepo}")
 
-                licenses {
-                    license {
-                        name.set(Meta.license)
-                        url.set("http://www.opensource.org/licenses/mit-license.php")
-                    }
+    repositories {
+        maven {
+            name = "Sonatype"
+            val releasesRepoUrl = Meta.release
+            val snapshotsRepoUrl = Meta.snapshot
+            url = uri(if (version.toString().endsWith("SNAPSHOT")) snapshotsRepoUrl else releasesRepoUrl)
+            credentials {
+                val osshrUsername = providers.environmentVariable("OSSRH_USERNAME").forUseAtConfigurationTime()
+                val osshrPassword = providers.environmentVariable("OSSRH_PASSWORD").forUseAtConfigurationTime()
+                if(osshrUsername.isPresent && osshrPassword.isPresent){
+                    username = osshrUsername.get()
+                    password = osshrPassword.get()
                 }
 
-                developers {
-                    developer {
-                        id.set("koluyten")
-                        name.set("Koen Luyten")
-                        organization.set("IDLAB")
-                        organizationUrl.set("https://www.ugent.be/ea/idlab/en")
-                    }
-                    developer {
-                        id.set("wkerckho")
-                        name.set("Wannes Kerckhove")
-                        organization.set("IDLAB")
-                        organizationUrl.set("https://www.ugent.be/ea/idlab/en")
-                    }
-                }
-
-                scm {
-                    url.set(
-                        "https://github.com/${Meta.githubRepo}.git"
-                    )
-                    connection.set(
-                        "scm:git:git://github.com/${Meta.githubRepo}.git"
-                    )
-                    developerConnection.set(
-                        "scm:git:git://github.com/${Meta.githubRepo}.git"
-                    )
-                }
-                issueManagement {
-                    url.set("https://github.com/${Meta.githubRepo}/issues")
-                }
             }
         }
     }

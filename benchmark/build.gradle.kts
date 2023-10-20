@@ -47,7 +47,7 @@ sdx {
 //        "https://data.vlaanderen.be/shacl/adresregister-SHACL.ttl",
 //        "https://data.vlaanderen.be/shacl/persoon-basis-SHACL.ttl"
     )
-    packageName.set("be.solid.sdx.benchmark.queries")
+    packageName.set("be.solid.sdx.demo.queries")
 }
 
 
