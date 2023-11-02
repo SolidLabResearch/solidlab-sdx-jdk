@@ -5,15 +5,13 @@ Java version of the Solid Development eXperience
 This repo contains source code for the Java version of the SDX in the ```gradle-plugin```, ```commons``` and ```client-lib``` directories, as well as a demo app in the ```demo-app``` directory and a (limited) benchmark to evaluate performance in the ```benchmark``` directory.
 
 ## How to run
-Currently to run the demo app, limited setup is necessary. 
+To run the demo app, limited setup is necessary. 
 
 First clone the repository to your local environment. 
 
-Run the Gradle task ```publishToMavenLocal``` in the ```demo-app``` project. This will allow you to use the Gradle Plugin in your other projects.
-Afterwards, run the Gradle task ```sdxBuild``` to generate the GraphQL schema based on the configuration in the ```build.gradle.kts``` file of the demo app.
+Run the Gradle task ```sdxBuild``` to generate the GraphQL schema based on the configuration in the ```build.gradle.kts``` file of the demo app.
 
-To run the demo app, you first have to launch a Solid Server with a pod. To do so, run ```npx @solid/community-server -c @css:config/file.json -f pod/```
-
+To run the demo app, you first have to launch a Solid Server with a pod. To do so, install docker and run ```docker compose up```  in the root directory of this project
 Finally, you can launch any of the programs in the main ```src``` folder of the demo app.
 
 ## Gradle configuration
@@ -26,7 +24,7 @@ To configure the Gradle plugin, add a ```sdx``` block to your ```build.gradle```
 * ```importShapes (ListProperty<ShapeImport>)```: List of the Shape imports (see below)
 
 ### ```ShapeImport```
-A list of ShapeImports should be provided for the Gradle plugin. These contains the configuration for the SHACL shapes that the Gradle Plugin will fetch and use to generate the GraphQL plugin. Each ```ShapeImport``` has the following options with listed defaults:
+A list of ShapeImports should be provided for the Gradle plugin. These contain the configuration for the SHACL shapes that the Gradle Plugin will fetch and use to generate the GraphQL plugin. Each ```ShapeImport``` has the following options with listed defaults:
 
 
 * ```catalogId: String? = null```
